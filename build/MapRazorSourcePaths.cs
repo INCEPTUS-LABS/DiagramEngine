@@ -19,9 +19,9 @@ public sealed class MapRazorSourcePaths : Microsoft.Build.Utilities.Task
     {
         try
         {
-            // RoslynCodeTaskFactory compiles against netstandard, whereas the pinned SDK parser
-            // targets its current runtime. Invoke only public syntax APIs at task execution time;
-            // do not load a second compiler version or parse C# with regular expressions.
+            // RoslynCodeTaskFactory compiles against netstandard. The SDK selects parser
+            // assemblies compatible with the active MSBuild runtime (Core or Full Framework).
+            // Invoke only public syntax APIs; this does not select the application compiler.
             Assembly.LoadFrom(Path.Combine(RoslynDirectory, "Microsoft.CodeAnalysis.dll"));
             var compiler = Assembly.LoadFrom(Path.Combine(RoslynDirectory, "Microsoft.CodeAnalysis.CSharp.dll"));
             var parse = compiler.GetType("Microsoft.CodeAnalysis.CSharp.CSharpSyntaxTree", true)

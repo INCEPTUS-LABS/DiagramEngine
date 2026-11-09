@@ -1,9 +1,9 @@
 using System.Collections.Immutable;
-using Inceptus.DocumentEngine.Contracts.Diagnostics;
-using Inceptus.DocumentEngine.Contracts.Documents;
-using Inceptus.DocumentEngine.Contracts.Validation;
-using Inceptus.DocumentEngine.Runtime.Documents;
-using Inceptus.DocumentEngine.Runtime.Validation;
+using Inceptus.DiagramEngine.Contracts.Diagnostics;
+using Inceptus.DiagramEngine.Contracts.Documents;
+using Inceptus.DiagramEngine.Contracts.Validation;
+using Inceptus.DiagramEngine.Runtime.Documents;
+using Inceptus.DiagramEngine.Runtime.Validation;
 
 namespace Inceptus.Bpmn.Integration;
 

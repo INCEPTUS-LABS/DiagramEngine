@@ -1,5 +1,5 @@
-using Inceptus.DocumentEngine.Contracts.Diagnostics;
-using Inceptus.DocumentEngine.Contracts.Documents;
+using Inceptus.DiagramEngine.Contracts.Diagnostics;
+using Inceptus.DiagramEngine.Contracts.Documents;
 
 namespace Inceptus.Bpmn.Integration;
 

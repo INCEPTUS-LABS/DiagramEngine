@@ -117,7 +117,7 @@ globalThis.document = {
 };
 
 const modulePath = path.resolve(
-    "src/Inceptus.DocumentEngine.Canvas2D/wwwroot/inceptus.canvas2d.js");
+    "src/Inceptus.DiagramEngine.Canvas2D/wwwroot/inceptus.canvas2d.js");
 const { createRenderer, createGraphicalExport } = await import(pathToFileURL(modulePath));
 
 test("graphical PNG uses a detached canvas, scale, white background and ordinary primitives", async () => {

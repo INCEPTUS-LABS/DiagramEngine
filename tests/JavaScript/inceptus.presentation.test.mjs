@@ -129,13 +129,13 @@ globalThis.cancelAnimationFrame = id => {
 };
 
 const modulePath = path.resolve(
-    "src/Inceptus.DocumentEngine.Bpmn.Blazor/wwwroot/inceptus.presentation.js");
+    "src/Inceptus.DiagramEngine.Bpmn.Blazor/wwwroot/inceptus.presentation.js");
 const {
     createCanvasPointerObserver,
     createCanvasSurfaceObserver,
     createDomPointerCaptureObserver
 } = await import(pathToFileURL(modulePath));
-const { downloadFile } = await import(pathToFileURL(path.resolve("src/Inceptus.DocumentEngine.Blazor/wwwroot/inceptus.documents.js")));
+const { downloadFile } = await import(pathToFileURL(path.resolve("src/Inceptus.DiagramEngine.Blazor/wwwroot/inceptus.documents.js")));
 
 test("editor preferences use separate browser storage and report unavailable writes", async () => {
     const { readEditorSettings, writeEditorSettings } = await import(pathToFileURL(modulePath));

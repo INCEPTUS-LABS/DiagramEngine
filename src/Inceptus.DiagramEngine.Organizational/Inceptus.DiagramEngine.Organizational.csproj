@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <PackageId>Inceptus.DiagramEngine.Organizational</PackageId>
+    <AssemblyName>Inceptus.DiagramEngine.Organizational</AssemblyName>
+    <RootNamespace>Inceptus.DiagramEngine.Organizational</RootNamespace>
+    <IsPackable>true</IsPackable>
+    <Description>Organizational Profile semantics and plugin contributions for the Inceptus Diagram Engine.</Description>
+    <PackageTags>inceptus;diagram-engine;organizational</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Inceptus.DiagramEngine.Contracts/Inceptus.DiagramEngine.Contracts.csproj" />
+  </ItemGroup>
+</Project>

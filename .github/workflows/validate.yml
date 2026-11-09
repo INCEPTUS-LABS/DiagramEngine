@@ -34,9 +34,9 @@ jobs:
       - name: Release solution build
         run: dotnet build -c Release --no-restore
       - name: Full Unit
-        run: dotnet test tests/Inceptus.DocumentEngine.UnitTests/Inceptus.DocumentEngine.UnitTests.csproj -c Release --no-build --no-restore --logger "trx;LogFileName=unit.trx" --results-directory "${{ runner.temp }}/results/unit"
+        run: dotnet test tests/Inceptus.DiagramEngine.UnitTests/Inceptus.DiagramEngine.UnitTests.csproj -c Release --no-build --no-restore --logger "trx;LogFileName=unit.trx" --results-directory "${{ runner.temp }}/results/unit"
       - name: Full Integration
-        run: dotnet test tests/Inceptus.DocumentEngine.IntegrationTests/Inceptus.DocumentEngine.IntegrationTests.csproj -c Release --no-build --no-restore --logger "trx;LogFileName=integration.trx" --results-directory "${{ runner.temp }}/results/integration"
+        run: dotnet test tests/Inceptus.DiagramEngine.IntegrationTests/Inceptus.DiagramEngine.IntegrationTests.csproj -c Release --no-build --no-restore --logger "trx;LogFileName=integration.trx" --results-directory "${{ runner.temp }}/results/integration"
       - name: JavaScript suites
         run: |
           node --test tests/JavaScript/inceptus.canvas2d.test.mjs
@@ -48,9 +48,9 @@ jobs:
       - name: JavaScript syntax
         run: |
           $files = @(
-            'src/Inceptus.DocumentEngine.Canvas2D/wwwroot/inceptus.canvas2d.js',
-            'src/Inceptus.DocumentEngine.Bpmn.Blazor/wwwroot/inceptus.presentation.js',
-            'src/Inceptus.DocumentEngine.Canvas2D/Publishing/Assets/inceptus.publish.js',
+            'src/Inceptus.DiagramEngine.Canvas2D/wwwroot/inceptus.canvas2d.js',
+            'src/Inceptus.DiagramEngine.Bpmn.Blazor/wwwroot/inceptus.presentation.js',
+            'src/Inceptus.DiagramEngine.Canvas2D/Publishing/Assets/inceptus.publish.js',
             'tests/JavaScript/inceptus.canvas2d.test.mjs',
             'tests/JavaScript/inceptus.presentation.test.mjs',
             'tests/JavaScript/inceptus.publish.test.mjs'
@@ -60,7 +60,7 @@ jobs:
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
       - name: Explicit RCL build
-        run: dotnet build src/Inceptus.DocumentEngine.Bpmn.Blazor/Inceptus.DocumentEngine.Bpmn.Blazor.csproj -c Release --no-restore
+        run: dotnet build src/Inceptus.DiagramEngine.Bpmn.Blazor/Inceptus.DiagramEngine.Bpmn.Blazor.csproj -c Release --no-restore
       - name: Formatting
         run: dotnet format --verify-no-changes
       - name: Diff and checkout cleanliness
@@ -72,7 +72,7 @@ jobs:
         run: |
           $output = Join-Path $env:RUNNER_TEMP 'release-packages'
           if (Test-Path $output) { throw 'Package output must be fresh.' }
-          foreach ($id in @('Inceptus.DocumentEngine.Contracts', 'Inceptus.DocumentEngine.Runtime', 'Inceptus.DocumentEngine.Bpmn', 'Inceptus.DocumentEngine.Organizational', 'Inceptus.DocumentEngine.Canvas2D', 'Inceptus.DocumentEngine.Bpmn.Blazor', 'Inceptus.Bpmn.Integration')) {
+          foreach ($id in @('Inceptus.DiagramEngine.Contracts', 'Inceptus.DiagramEngine.Runtime', 'Inceptus.DiagramEngine.Bpmn', 'Inceptus.DiagramEngine.Organizational', 'Inceptus.DiagramEngine.Canvas2D', 'Inceptus.DiagramEngine.Bpmn.Blazor', 'Inceptus.Bpmn.Integration')) {
             dotnet pack "src/$id/$id.csproj" -c Release --no-build --no-restore --output $output
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }

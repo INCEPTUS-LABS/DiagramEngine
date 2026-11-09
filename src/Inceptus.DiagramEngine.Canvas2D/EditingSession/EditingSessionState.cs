@@ -1,0 +1,273 @@
+using System.Collections.Immutable;
+using Inceptus.DiagramEngine.Canvas2D.Scene;
+using Inceptus.DiagramEngine.Contracts.Canvas2D;
+using Inceptus.DiagramEngine.Contracts.Diagnostics;
+using Inceptus.DiagramEngine.Contracts.EditorState;
+using Inceptus.DiagramEngine.Contracts.History;
+using Inceptus.DiagramEngine.Contracts.Layout;
+using Inceptus.DiagramEngine.Contracts.Primitives;
+using Inceptus.DiagramEngine.Contracts.Presentation;
+using Inceptus.DiagramEngine.Contracts.Profiles;
+using Inceptus.DiagramEngine.Contracts.Projection;
+using Inceptus.DiagramEngine.Contracts.Routing;
+
+namespace Inceptus.DiagramEngine.Canvas2D.EditingSession;
+
+/// <summary>
+/// Immutable observation of one active Editing Session. A last-known-good scene is always stale.
+/// </summary>
+public sealed class EditingSessionState
+{
+    internal EditingSessionState(
+        DocumentId documentId,
+        DocumentRevision documentRevision,
+        EditingSessionStatus status,
+        EditingSessionGeneration generation,
+        Canvas2DScene? currentScene,
+        Canvas2DScene? lastKnownGoodScene,
+        ProjectedGraph? projectedGraph,
+        LayoutResult? layoutResult,
+        RoutingResult? routingResult,
+        EditorStateSnapshot editorState,
+        HistoryStatus historyStatus,
+        IEnumerable<Diagnostic>? runtimeDiagnostics,
+        IEnumerable<Diagnostic>? presentationDiagnostics,
+        bool isClosed,
+        ModelProfileCatalog? modelProfileCatalog = null,
+        ModelProfileStateSnapshot? modelProfileState = null,
+        ModelProfileViewStateSnapshot? modelProfileViewState = null,
+        ModelProfileElementViewStateSnapshot? modelProfileElementViewState = null,
+        bool isCurrentScenePresented = false)
+        : this(
+            documentId,
+            documentRevision,
+            new DocumentScopeId(documentId.Value),
+            status,
+            generation,
+            currentScene,
+            lastKnownGoodScene,
+            projectedGraph,
+            layoutResult,
+            routingResult,
+            editorState,
+            historyStatus,
+            runtimeDiagnostics,
+            presentationDiagnostics,
+            isClosed,
+            modelProfileCatalog,
+            modelProfileState,
+            modelProfileViewState,
+            modelProfileElementViewState,
+            isCurrentScenePresented)
+    {
+    }
+
+    internal EditingSessionState(
+        DocumentId documentId,
+        DocumentRevision documentRevision,
+        DocumentScopeId activeScopeId,
+        EditingSessionStatus status,
+        EditingSessionGeneration generation,
+        Canvas2DScene? currentScene,
+        Canvas2DScene? lastKnownGoodScene,
+        ProjectedGraph? projectedGraph,
+        LayoutResult? layoutResult,
+        RoutingResult? routingResult,
+        EditorStateSnapshot editorState,
+        HistoryStatus historyStatus,
+        IEnumerable<Diagnostic>? runtimeDiagnostics,
+        IEnumerable<Diagnostic>? presentationDiagnostics,
+        bool isClosed,
+        ModelProfileCatalog? modelProfileCatalog = null,
+        ModelProfileStateSnapshot? modelProfileState = null,
+        ModelProfileViewStateSnapshot? modelProfileViewState = null,
+        ModelProfileElementViewStateSnapshot? modelProfileElementViewState = null,
+        bool isCurrentScenePresented = false,
+        bool isPanPresentationPending = false,
+        PresentationViewContext? presentationContext = null,
+        PresentationViewPlan? presentationPlan = null,
+        ImmutableArray<VisualStateId> selectionOrder = default)
+    {
+        ArgumentNullException.ThrowIfNull(documentId);
+        ArgumentNullException.ThrowIfNull(activeScopeId);
+        ArgumentNullException.ThrowIfNull(editorState);
+        ArgumentNullException.ThrowIfNull(historyStatus);
+        if (!Enum.IsDefined(status))
+        {
+            throw new ArgumentOutOfRangeException(nameof(status), status, "The status must be defined.");
+        }
+
+        var hasCompleteRuntimeTuple =
+            currentScene is not null &&
+            projectedGraph is not null &&
+            layoutResult is not null &&
+            routingResult is not null;
+        if (!isClosed && status == EditingSessionStatus.Ready &&
+            (!hasCompleteRuntimeTuple ||
+             currentScene!.DocumentId != documentId ||
+             currentScene.SourceRevision != documentRevision ||
+             projectedGraph!.DocumentId != documentId ||
+             projectedGraph.SourceRevision != documentRevision ||
+             layoutResult!.DocumentId != documentId ||
+             layoutResult.SourceRevision != documentRevision ||
+             routingResult!.DocumentId != documentId ||
+             routingResult.SourceRevision != documentRevision ||
+             lastKnownGoodScene is not null))
+        {
+            throw new ArgumentException(
+                "A Ready session requires one current scene for its current Document revision.",
+                nameof(currentScene));
+        }
+
+        if (status != EditingSessionStatus.Ready &&
+            (currentScene is not null || projectedGraph is not null ||
+             layoutResult is not null || routingResult is not null))
+        {
+            throw new ArgumentException(
+                "Only a Ready session may expose a current scene.",
+                nameof(currentScene));
+        }
+
+        if (isClosed && (currentScene is not null || lastKnownGoodScene is not null ||
+            projectedGraph is not null || layoutResult is not null || routingResult is not null))
+        {
+            throw new ArgumentException("A closed session cannot expose runtime results.", nameof(isClosed));
+        }
+
+        DocumentId = documentId;
+        DocumentRevision = documentRevision;
+        PresentationContext = presentationContext ?? new ProcessScopePresentationContext(activeScopeId);
+        PresentationPlan = presentationPlan;
+        Status = status;
+        Generation = generation;
+        CurrentScene = currentScene;
+        LastKnownGoodScene = lastKnownGoodScene;
+        ProjectedGraph = projectedGraph;
+        LayoutResult = layoutResult;
+        RoutingResult = routingResult;
+        EditorState = editorState;
+        SelectionOrder = selectionOrder.IsDefault ? editorState.Selection : selectionOrder;
+        HistoryStatus = historyStatus;
+        ModelProfileCatalog = modelProfileCatalog ??
+            Inceptus.DiagramEngine.Contracts.Profiles.ModelProfileCatalog.Empty;
+        ModelProfileState = modelProfileState ?? ModelProfileStateSnapshot.Empty;
+        ModelProfileViewState = modelProfileViewState ??
+            ModelProfileViewStateSnapshot.Empty;
+        ModelProfileElementViewState = modelProfileElementViewState ??
+            ModelProfileElementViewStateSnapshot.Empty;
+        RuntimeDiagnostics = EditingSessionDiagnosticCollection.CopyAndOrder(
+            runtimeDiagnostics,
+            nameof(runtimeDiagnostics));
+        PresentationDiagnostics = EditingSessionDiagnosticCollection.CopyAndOrder(
+            presentationDiagnostics,
+            nameof(presentationDiagnostics));
+        IsClosed = isClosed;
+        IsCurrentScenePresented = !isClosed && status == EditingSessionStatus.Ready &&
+            isCurrentScenePresented;
+        IsPanPresentationPending = isPanPresentationPending;
+    }
+
+    public DocumentId DocumentId { get; }
+
+    public DocumentRevision DocumentRevision { get; }
+
+    public PresentationViewContext PresentationContext { get; }
+
+    public PresentationViewPlan? PresentationPlan { get; }
+
+    public DocumentScopeId ActiveScopeId => PresentationContext is ProcessScopePresentationContext process
+        ? process.ScopeId : throw new InvalidOperationException("A document presentation has no active process scope.");
+
+    public EditingSessionStatus Status { get; }
+
+    public EditingSessionGeneration Generation { get; }
+
+    public Canvas2DScene? CurrentScene { get; }
+
+    public Canvas2DScene? LastKnownGoodScene { get; }
+
+    public ProjectedGraph? ProjectedGraph { get; }
+
+    public LayoutResult? LayoutResult { get; }
+
+    public RoutingResult? RoutingResult { get; }
+
+    public EditorStateSnapshot EditorState { get; }
+
+    /// <summary>
+    /// Current selection in acquisition order, with the earliest surviving selection first.
+    /// Targets added together use canonical ID order. This is transient session metadata.
+    /// </summary>
+    public ImmutableArray<VisualStateId> SelectionOrder { get; }
+
+    public HistoryStatus HistoryStatus { get; }
+
+    public ModelProfileCatalog ModelProfileCatalog { get; }
+
+    public ModelProfileStateSnapshot ModelProfileState { get; }
+
+    public ModelProfileViewStateSnapshot ModelProfileViewState { get; }
+
+    public ModelProfileElementViewStateSnapshot ModelProfileElementViewState { get; }
+
+    public ImmutableArray<Diagnostic> RuntimeDiagnostics { get; }
+
+    public ImmutableArray<Diagnostic> PresentationDiagnostics { get; }
+
+    public bool IsClosed { get; }
+
+    /// <summary>
+    /// True only after graphics execution for the current scene generation succeeds.
+    /// Ready alone means that the scene is installed, not that it has been presented.
+    /// </summary>
+    public bool IsCurrentScenePresented { get; }
+
+    /// <summary>
+    /// Identifies an intermediate publication of the proven current Pan presentation.
+    /// This observation never changes readiness, currency or interaction eligibility.
+    /// Consumers must still reconcile state and render completion or failure normally.
+    /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool IsPanPresentationPending { get; }
+
+    public bool IsGraphicalInteractionEnabled =>
+        !IsClosed && Status == EditingSessionStatus.Ready && CurrentScene is not null;
+
+    public bool IsDisplayingStaleScene =>
+        !IsClosed &&
+        Status is EditingSessionStatus.Rebuilding or EditingSessionStatus.RuntimeFaulted &&
+        LastKnownGoodScene is not null;
+
+    public bool IsModelProfileEffectivelyVisible(ModelProfileId profileId)
+    {
+        ArgumentNullException.ThrowIfNull(profileId);
+        return ModelProfileViewState.IsEffectivelyVisible(profileId, ModelProfileState);
+    }
+
+    /// <summary>Gets the current active Process artifacts for interaction, never another scope.</summary>
+    public bool TryGetCurrentProcessInteraction(out EditingSessionState? state)
+    {
+        state = PresentationContext is ProcessScopePresentationContext && IsGraphicalInteractionEnabled && ProjectedGraph is not null &&
+            LayoutResult is not null && RoutingResult is not null ? this : null;
+        return state is not null;
+    }
+
+    public bool TryGetCurrentPresentationInteraction(out EditingSessionState? state)
+    {
+        state = IsGraphicalInteractionEnabled && ProjectedGraph is not null &&
+            LayoutResult is not null && RoutingResult is not null &&
+            (PresentationContext is ProcessScopePresentationContext || PresentationPlan is not null) ? this : null;
+        return state is not null;
+    }
+}
+
+public sealed class EditingSessionStateChangedEventArgs : EventArgs
+{
+    public EditingSessionStateChangedEventArgs(EditingSessionState state)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+        State = state;
+    }
+
+    public EditingSessionState State { get; }
+}

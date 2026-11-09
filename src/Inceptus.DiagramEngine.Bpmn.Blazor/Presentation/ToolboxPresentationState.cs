@@ -1,0 +1,69 @@
+using System.Collections.Immutable;
+using Inceptus.DiagramEngine.Contracts.Primitives;
+
+namespace Inceptus.DiagramEngine.Bpmn.Blazor.Presentation;
+
+internal enum ToolboxViewMode
+{
+    Expanded,
+    Compact,
+}
+
+internal sealed class ToolboxPresentationState
+{
+    private ImmutableHashSet<ToolboxGroupId> _knownGroupIds = [];
+    private ToolboxViewMode? _viewModeBeforeMaximizing;
+
+    internal ToolboxViewMode ViewMode { get; private set; } = ToolboxViewMode.Expanded;
+
+    internal ToolboxGroupId? ExpandedToolboxGroupId { get; private set; }
+
+    internal void Reconcile(IEnumerable<ToolboxGroupId> visibleGroupIds)
+    {
+        ArgumentNullException.ThrowIfNull(visibleGroupIds);
+        var orderedIds = visibleGroupIds.ToImmutableArray();
+        if (orderedIds.Any(static groupId => groupId is null))
+        {
+            throw new ArgumentException(
+                "Visible Toolbox groups cannot contain null identifiers.",
+                nameof(visibleGroupIds));
+        }
+
+        _knownGroupIds = orderedIds.ToImmutableHashSet();
+        if (ExpandedToolboxGroupId is not null &&
+            !_knownGroupIds.Contains(ExpandedToolboxGroupId))
+        {
+            ExpandedToolboxGroupId = orderedIds.FirstOrDefault();
+        }
+    }
+
+    internal bool ToggleGroup(ToolboxGroupId groupId)
+    {
+        ArgumentNullException.ThrowIfNull(groupId);
+        if (!_knownGroupIds.Contains(groupId))
+        {
+            return false;
+        }
+
+        ExpandedToolboxGroupId = ExpandedToolboxGroupId == groupId ? null : groupId;
+        return true;
+    }
+
+    internal void ToggleViewMode() => ViewMode = ViewMode == ToolboxViewMode.Expanded
+        ? ToolboxViewMode.Compact
+        : ToolboxViewMode.Expanded;
+
+    internal void SynchronizeDisplayMode(BpmnModelerDisplayMode displayMode)
+    {
+        if (displayMode == BpmnModelerDisplayMode.Maximized && _viewModeBeforeMaximizing is null)
+        {
+            _viewModeBeforeMaximizing = ViewMode;
+            ViewMode = ToolboxViewMode.Compact;
+        }
+        else if (displayMode == BpmnModelerDisplayMode.Normal && _viewModeBeforeMaximizing is { } previous)
+        {
+            ViewMode = previous;
+            _viewModeBeforeMaximizing = null;
+        }
+    }
+}

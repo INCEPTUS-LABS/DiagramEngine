@@ -1,7 +1,7 @@
 using System.Collections.Immutable;
-using Inceptus.DocumentEngine.Contracts.Diagnostics;
-using Inceptus.DocumentEngine.Contracts.Documents;
-using Inceptus.DocumentEngine.Contracts.Routing;
+using Inceptus.DiagramEngine.Contracts.Diagnostics;
+using Inceptus.DiagramEngine.Contracts.Documents;
+using Inceptus.DiagramEngine.Contracts.Routing;
 
 namespace Inceptus.Bpmn.Integration;
 

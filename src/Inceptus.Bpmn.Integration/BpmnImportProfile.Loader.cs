@@ -82,7 +82,7 @@ public sealed partial class BpmnImportProfile
                         if (rule.TargetValue is { } targetValue) _ = BpmnImportAttributeRule.Normalize(targetValue, kind);
                         if (rule.Strategy == BpmnImportStrategy.DerivedFromTopology &&
                             (attributeName != "gatewayDirection" || !BpmnXmlVocabulary.Nodes.Any(mapping => name == BpmnXmlVocabulary.Model + mapping.Element &&
-                                DocumentEngine.Bpmn.Semantics.BpmnGatewaySemanticTypes.IsGateway(mapping.Type))))
+                                DiagramEngine.Bpmn.Semantics.BpmnGatewaySemanticTypes.IsGateway(mapping.Type))))
                             throw Invalid("DerivedFromTopology is only supported for mapped gateways' gatewayDirection.");
                         if (rule.Action == BpmnImportAction.Map && (name != BpmnXmlVocabulary.Model + "documentation" || attributeName != "textFormat"))
                             throw Invalid("This attribute has no configurable Map binding: " + attributeName);

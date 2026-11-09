@@ -1,6 +1,6 @@
 using System.Collections.Immutable;
-using Inceptus.DocumentEngine.Contracts.Documents;
-using Inceptus.DocumentEngine.Runtime.Documents;
+using Inceptus.DiagramEngine.Contracts.Documents;
+using Inceptus.DiagramEngine.Runtime.Documents;
 
 namespace Inceptus.Bpmn.Integration;
 

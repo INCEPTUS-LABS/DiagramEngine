@@ -4,7 +4,7 @@
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <Copyright>Copyright (c) 2026 Inceptus Robert Prokopczuk</Copyright>
     <PackageProjectUrl>https://inceptus.online/bpmn/editor/</PackageProjectUrl>
-    <RepositoryUrl>https://github.com/INCEPTUS-LABS/DocumentEngine</RepositoryUrl>
+    <RepositoryUrl>https://github.com/INCEPTUS-LABS/DiagramEngine</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
     <PackageIcon>inceptus-nuget-icon.png</PackageIcon>
@@ -21,7 +21,6 @@
     <ParameterGroup>
       <NotesFile ParameterType="System.String" Required="true" />
       <Version ParameterType="System.String" Required="true" />
-      <PreviousPublishedVersion ParameterType="System.String" Required="true" />
       <PackageId ParameterType="System.String" Required="true" />
       <PublicationBaseline ParameterType="Microsoft.Build.Framework.ITaskItem[]" Required="true" />
       <ReleaseNotes ParameterType="System.String" Output="true" />
@@ -32,20 +31,46 @@
       <Using Namespace="System.Text.RegularExpressions" />
       <Using Namespace="System.Text" />
       <Code Type="Fragment" Language="cs"><![CDATA[
-        System.Version current, baseline;
-        var family = new[] { "Inceptus.DocumentEngine.Contracts", "Inceptus.DocumentEngine.Runtime", "Inceptus.DocumentEngine.Bpmn",
-            "Inceptus.DocumentEngine.Organizational", "Inceptus.DocumentEngine.Canvas2D", "Inceptus.DocumentEngine.Bpmn.Blazor", "Inceptus.Bpmn.Integration" };
+        System.Version current;
+        var family = new[] { "Inceptus.DiagramEngine.Contracts", "Inceptus.DiagramEngine.Runtime", "Inceptus.DiagramEngine.Bpmn",
+            "Inceptus.DiagramEngine.Organizational", "Inceptus.DiagramEngine.Canvas2D", "Inceptus.DiagramEngine.Bpmn.Blazor", "Inceptus.Bpmn.Integration" };
         if (!Regex.IsMatch(Version, @"^[0-9]+\.[0-9]+\.[0-9]+$") || !System.Version.TryParse(Version, out current)
-            || !Regex.IsMatch(PreviousPublishedVersion, @"^[0-9]+\.[0-9]+\.[0-9]+$")
-            || !System.Version.TryParse(PreviousPublishedVersion, out baseline) || baseline >= current
+            || current < new System.Version(1, 0, 0)
             || !PublicationBaseline.Select(item => item.ItemSpec).OrderBy(id => id, StringComparer.Ordinal)
                 .SequenceEqual(family.OrderBy(id => id, StringComparer.Ordinal))
-            || !PublicationBaseline.Any(item => item.ItemSpec == PackageId)
-            || PublicationBaseline.Any(item => item.GetMetadata("PublishedVersion") != PreviousPublishedVersion))
+            || !PublicationBaseline.Any(item => item.ItemSpec == PackageId))
         {
             Log.LogError("Invalid or inconsistent publication baseline for {0}.", Version);
             return false;
         }
+        var initial = PublicationBaseline.Any(item => item.GetMetadata("State") == "NeverPublished");
+        var predecessors = new System.Collections.Generic.List<string>();
+        foreach (var item in PublicationBaseline)
+        {
+            var state = item.GetMetadata("State");
+            var previous = item.GetMetadata("PublishedVersion");
+            System.Version parsed;
+            var valid = state == "NeverPublished"
+                ? Version == "1.0.0" && item.ItemSpec != "Inceptus.Bpmn.Integration" && previous.Length == 0
+                : state == "Published" && Regex.IsMatch(previous, @"^[0-9]+\.[0-9]+\.[0-9]+$")
+                    && System.Version.TryParse(previous, out parsed) && parsed < current
+                    && (initial ? item.ItemSpec == "Inceptus.Bpmn.Integration" && parsed < new System.Version(1, 0, 0)
+                        : parsed >= new System.Version(1, 0, 0));
+            if (!valid)
+            {
+                Log.LogError("Invalid publication baseline for {0}.", item.ItemSpec);
+                return false;
+            }
+            if (state == "Published") predecessors.Add(previous);
+        }
+        if (initial ? predecessors.Count != 1 : predecessors.Distinct(StringComparer.Ordinal).Count() != 1)
+        {
+            Log.LogError("Invalid or inconsistent publication baseline for {0}.", Version);
+            return false;
+        }
+        var packageBaseline = PublicationBaseline.Single(item => item.ItemSpec == PackageId);
+        var neverPublished = packageBaseline.GetMetadata("State") == "NeverPublished";
+        var baseline = neverPublished ? null : System.Version.Parse(packageBaseline.GetMetadata("PublishedVersion"));
         // The release workflow uses stable three-component versions. Keep section order and Markdown.
         // XML metadata normalizes line endings; the packaged historical file remains unchanged.
         var text = File.ReadAllText(NotesFile).Replace("\r\n", "\n").Replace("\r", "\n");
@@ -62,7 +87,7 @@
                 Log.LogError("Invalid release notes version heading: {0}.", value);
                 return false;
             }
-            if (sectionVersion <= baseline || sectionVersion > current) continue;
+            if (sectionVersion > current || (neverPublished ? sectionVersion != current : sectionVersion <= baseline)) continue;
             var next = headings.Cast<Match>().FirstOrDefault(candidate => candidate.Index > heading.Index);
             var end = next == null ? text.Length : next.Index;
             var bodyStart = heading.Index + heading.Length;
@@ -86,7 +111,7 @@
   <!-- Run for pack with or without a build, before NuGet reads PackageReleaseNotes. -->
   <Target Name="SetPackageReleaseNotes" BeforeTargets="GenerateNuspec" Condition="'$(IsPackable)' == 'true'">
     <ExtractPackageReleaseNotes NotesFile="$(MSBuildThisFileDirectory)RELEASE-NOTES.md" Version="$(Version)"
-        PreviousPublishedVersion="$(PreviousPublishedVersion)" PackageId="$(PackageId)" PublicationBaseline="@(PublicationBaselinePackage)">
+        PackageId="$(PackageId)" PublicationBaseline="@(PublicationBaselinePackage)">
       <Output TaskParameter="ReleaseNotes" PropertyName="PackageReleaseNotes" />
     </ExtractPackageReleaseNotes>
   </Target>

@@ -1,0 +1,16 @@
+@namespace Inceptus.DiagramEngine.Bpmn.Blazor.Components
+@using Inceptus.DiagramEngine.Bpmn.Blazor.Presentation
+@using System.Globalization
+
+<CascadingValue Value="_facade" IsFixed="true">
+    <div class="@RootClass"
+         style="@Style"
+         data-display-mode="@_displayMode.ToString().ToLowerInvariant()"
+         @attributes="AdditionalAttributes">
+        <CascadingValue Name="ModelerUICulture" Value="CultureInfo.CurrentUICulture">
+            <CascadingValue Value="DisplayPresentation">
+                <DocumentCanvas @ref="_canvas" />
+            </CascadingValue>
+        </CascadingValue>
+    </div>
+</CascadingValue>

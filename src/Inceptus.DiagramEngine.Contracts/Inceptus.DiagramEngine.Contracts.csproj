@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <PackageId>Inceptus.DiagramEngine.Contracts</PackageId>
+    <AssemblyName>Inceptus.DiagramEngine.Contracts</AssemblyName>
+    <RootNamespace>Inceptus.DiagramEngine.Contracts</RootNamespace>
+    <IsPackable>true</IsPackable>
+    <Description>Immutable contracts and extension APIs for the Inceptus Diagram Engine.</Description>
+    <PackageTags>inceptus;diagram-engine;contracts</PackageTags>
+  </PropertyGroup>
+</Project>

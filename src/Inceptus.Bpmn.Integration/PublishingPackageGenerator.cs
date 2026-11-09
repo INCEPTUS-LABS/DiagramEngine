@@ -1,14 +1,14 @@
-using Inceptus.DocumentEngine.Bpmn.Publishing;
-using Inceptus.DocumentEngine.Canvas2D.Publishing;
-using Inceptus.DocumentEngine.Contracts.Documents;
+using Inceptus.DiagramEngine.Bpmn.Publishing;
+using Inceptus.DiagramEngine.Canvas2D.Publishing;
+using Inceptus.DiagramEngine.Contracts.Documents;
 using System.Collections.Immutable;
-using Inceptus.DocumentEngine.Bpmn.Semantics;
-using Inceptus.DocumentEngine.Contracts.Diagnostics;
-using Inceptus.DocumentEngine.Contracts.Primitives;
-using Inceptus.DocumentEngine.Contracts.Semantics;
-using Inceptus.DocumentEngine.Contracts.Properties;
-using Inceptus.DocumentEngine.Organizational.Semantics;
-using Inceptus.DocumentEngine.Contracts.Presentation;
+using Inceptus.DiagramEngine.Bpmn.Semantics;
+using Inceptus.DiagramEngine.Contracts.Diagnostics;
+using Inceptus.DiagramEngine.Contracts.Primitives;
+using Inceptus.DiagramEngine.Contracts.Semantics;
+using Inceptus.DiagramEngine.Contracts.Properties;
+using Inceptus.DiagramEngine.Organizational.Semantics;
+using Inceptus.DiagramEngine.Contracts.Presentation;
 
 namespace Inceptus.Bpmn.Integration;
 

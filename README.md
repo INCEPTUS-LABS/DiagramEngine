@@ -1,17 +1,29 @@
-# Inceptus Document Engine
+# Inceptus Diagram Engine
 
 A reusable BPMN modeler with immutable native documents and a standalone process
-presentation export. This README describes the locally prepared **0.1.18** release
-candidate targeting **net10.0**; public publication is a separate step.
+presentation export. This README describes **1.0.0**, targeting **net10.0**, with
+SDK **10.0.403** for source builds. The migration guidance below does not announce
+completion of the GitHub repository rename, public NuGet publication or
+legacy-package deprecation.
 
-Version 0.1.18 updates Microsoft ASP.NET Core Components, JSInterop and Localization
-dependencies to **10.0.14**, and Microsoft.NET.Test.Sdk to **18.11.0**. It retains
-SDK **10.0.403** and net10.0. All seven packages use the verified complete nuget.org
-publication **0.1.17** as their persisted baseline, so cumulative PackageReleaseNotes
-contains exactly the recorded **0.1.18** section. Builds do not query the feed.
-The complete historical release notes remain packaged, and historical artifacts
-remain immutable. Existing public APIs, document formats, package metadata and
-the editor features and compatibility notes below still apply.
+The six engine packages, assemblies and namespace prefixes migrate from
+`Inceptus.DocumentEngine.*` to `Inceptus.DiagramEngine.*`. Recompile consumers and
+migrate their complete dependency graph together: this is an intentional source
+and binary compatibility break. Update PackageReferences, C#/Razor imports and
+qualified type references for Contracts, Runtime, Bpmn, Organizational, Canvas2D
+and Bpmn.Blazor. `Inceptus.Bpmn.Integration`
+retains its Package ID, assembly name and namespace and advances to **1.0.0**;
+its public signatures now expose DiagramEngine types. Do not mix the two families.
+`AddInceptusBpmnModeler()` remains in `Microsoft.Extensions.DependencyInjection`.
+
+Native `Inceptus.Document` formatVersion **2**, `Inceptus.PublishedProcess`
+formatVersion **1**, BPMN functionality, browser preference keys and execution
+behavior are unchanged. Existing documents require no rebranding conversion.
+Microsoft production dependencies remain **10.0.14**.
+
+RCL assets now use `_content/Inceptus.DiagramEngine.Canvas2D/` and
+`_content/Inceptus.DiagramEngine.Bpmn.Blazor/`. Update host-owned module/font URLs
+and rebuild published Blazor assets. Keep the existing JavaScript filenames.
 
 [Open BPMN Editor](https://bpmn-editor.inceptus.online)
 
@@ -19,28 +31,29 @@ the editor features and compatibility notes below still apply.
 
 | Package | Intended entry point |
 | --- | --- |
-| `Inceptus.DocumentEngine.Bpmn.Blazor` | Reusable BPMN editor and immutable document exchange. |
+| `Inceptus.DiagramEngine.Bpmn.Blazor` | Reusable BPMN editor and immutable document exchange. |
 | `Inceptus.Bpmn.Integration` | Native serialization, version compatibility, explicit document validation, BPMN 2.0.2 conversion and publishing package generation. |
-| `Inceptus.DocumentEngine.Contracts` | Advanced, notation-neutral immutable models and extension contracts; the snapshot graph is also part of ordinary facade input/output. |
-| `Inceptus.DocumentEngine.Runtime` | Advanced headless document, command, processing and History infrastructure. |
-| `Inceptus.DocumentEngine.Bpmn` | Advanced BPMN semantics, commands, validation and plugin contributions. |
-| `Inceptus.DocumentEngine.Organizational` | Advanced Organizational profile composition, independent of the browser renderer. |
-| `Inceptus.DocumentEngine.Canvas2D` | Advanced browser/session integration, generic Canvas2D rendering and standalone Publish construction. |
+| `Inceptus.DiagramEngine.Contracts` | Advanced, notation-neutral immutable models and extension contracts; the snapshot graph is also part of ordinary facade input/output. |
+| `Inceptus.DiagramEngine.Runtime` | Advanced headless document, command, processing and History infrastructure. |
+| `Inceptus.DiagramEngine.Bpmn` | Advanced BPMN semantics, commands, validation and plugin contributions. |
+| `Inceptus.DiagramEngine.Organizational` | Advanced Organizational profile composition, independent of the browser renderer. |
+| `Inceptus.DiagramEngine.Canvas2D` | Advanced browser/session integration, generic Canvas2D rendering and standalone Publish construction. |
 
 Use the seven packages as an **aligned version family**. The modeler and Integration are separate entry points: hosts performing document transfer, validation or publishing reference both. Each brings its lower packages transitively. Integration depends on Contracts, Runtime, Bpmn, Organizational and Canvas2D; it does not depend on the editor UI or Demo. Independent mixed family versions are unsupported and unverified. Canvas2D requires its matching Runtime version because it consumes Runtime's internal History contract. Other dependency ranges retain their existing minimum-version policy. A direct dependency override can still produce an incompatible graph and a NuGet warning; the constraint is not a runtime compatibility guarantee.
 
-In 0.1.9, `Inceptus.DocumentEngine.Bpmn` depends on both Contracts and
+`Inceptus.DiagramEngine.Bpmn` depends on both Contracts and
 Organizational. It uses Organizational's Pool membership, Participant assignment
 and region geometry for BPMN flow rules and editing. These dependencies resolve
 transitively; hosts using only editing still need only the Bpmn.Blazor reference.
 
 ## Embed the modeler
 
-The validated hosting model is a **standalone Blazor WebAssembly application** on .NET 10. Configure a feed containing the reviewed candidate before adding the package:
+The supported hosting model is a **standalone Blazor WebAssembly application** on
+.NET 10. Use the aligned 1.0.0 family when it is available from your package source:
 
 ```xml
-<PackageReference Include="Inceptus.DocumentEngine.Bpmn.Blazor" Version="0.1.18" />
-<PackageReference Include="Inceptus.Bpmn.Integration" Version="0.1.18" />
+<PackageReference Include="Inceptus.DiagramEngine.Bpmn.Blazor" Version="1.0.0" />
+<PackageReference Include="Inceptus.Bpmn.Integration" Version="1.0.0" />
 ```
 
 Register the modeler in the application's `Program.cs`. The extension namespace is `Microsoft.Extensions.DependencyInjection`:
@@ -54,9 +67,9 @@ builder.Services.AddInceptusBpmnModeler();
 Render the public component in a container with usable dimensions:
 
 ```razor
-@using Inceptus.DocumentEngine.Bpmn.Blazor
-@using Inceptus.DocumentEngine.Bpmn.Blazor.Components
-@using Inceptus.DocumentEngine.Contracts.Documents
+@using Inceptus.DiagramEngine.Bpmn.Blazor
+@using Inceptus.DiagramEngine.Bpmn.Blazor.Components
+@using Inceptus.DiagramEngine.Contracts.Documents
 
 <div style="height: 75vh; min-height: 24rem;">
     <InceptusBpmnModeler @ref="_modeler"
@@ -97,9 +110,26 @@ Razor static-web-asset integration supplies the package's JavaScript, scoped CSS
 
 ## Source Demo
 
-The canonical source Demo is `src/Inceptus.DocumentEngine.Blazor`. It uses project references to the current engine and starts with its embedded branching order-process sample. Run it with `dotnet run --project src/Inceptus.DocumentEngine.Blazor -c Release`. The sample includes named event-gateway branches, an expandable subprocess and a boundary timer. Its two closely spaced branch labels have explicit placements; Reset label position restores the automatic near-source placement.
+The source Demo is a public reference application for integrating the modeler.
+Open `Inceptus.DiagramEngine.sln` and select `Inceptus.DiagramEngine.Blazor`, or run
+`dotnet run --project src/Inceptus.DiagramEngine.Blazor -c Release` from the source
+checkout. The project uses references to the current engine source; package
+consumers use the public component and PackageReferences described above.
 
-The Demo exercises the current activity selection, drag-preview, viewport culling, pan/zoom and renderer-cache paths without opt-in settings. Select activity bodies and captions, move activities, use Undo/Redo, navigate into the subprocess, and pan or zoom the diagram. Selection and viewport changes remain transient; accepted edits use the existing command and History path. The Demo is not packaged; package consumers use the public component described above.
+`Program.cs` selects `BpmnPoolDemoStartupDocumentProvider`: Company A has Sales
+and Warehouse Lanes, alongside independent Supplier and Supplier B Pools.
+The alternative embedded branching order-process sample is available through
+`BpmnDemoStartupDocumentProvider`. It includes named event-gateway branches, an
+expandable subprocess and a boundary timer. Its two closely spaced branch labels
+have explicit placements; Reset label position restores automatic near-source
+placement.
+
+The Demo demonstrates activity selection, drag-preview, viewport culling, pan/zoom
+and renderer-cache paths without opt-in settings. Select activity bodies and
+captions, move activities, use Undo/Redo, and pan or zoom the diagram. Selection
+and viewport changes remain transient; accepted edits use Commands and History.
+The application source is available as an example; the Demo itself is not a NuGet
+package. Its host operations are described below.
 
 ## Editing tools
 
@@ -186,7 +216,7 @@ native/published format versions remain unchanged.
 These controls and behaviours are supplied by `InceptusBpmnModeler`. Existing
 package hosts receive them by updating the aligned package family and retaining
 normal Razor static assets and localization setup. No host colour form, connector
-toolbox or event-name implementation is required. The internal source Demo's
+toolbox or event-name implementation is required. The source Demo's
 placement-preview toolbar cache adjustment belongs to its own host orchestration.
 
 ## Graphical export and drawing area
@@ -217,10 +247,9 @@ commits on release, while mouse placement retains its existing behavior. Panning
 does not modify the document or History. Hosts receive this through the packaged
 CSS/JavaScript and should not add a second gesture handler.
 
-Physical mobile-device, touchscreen and laptop-touchpad acceptance has **not**
-been performed. It remains deferred until public package publication and
-integration into the standalone InceptusBpmnEditor; browser simulation and
-automated coverage do not establish physical-device acceptance.
+Physical mobile-device, touchscreen and laptop-touchpad compatibility has not
+been established. Browser simulation and automated coverage do not establish
+physical-device compatibility.
 
 ## UI localization
 
@@ -254,14 +283,14 @@ The component owns its live Document, editing session, History and browser resou
 
 Callback **invocation** is ordered. Arbitrary asynchronous consumer callbacks may complete in a different order and may await subsequent modeler operations. Callback exceptions do not roll back committed changes. Track DocumentId together with revision: replacing a document can legitimately lower the revision number. Disposal and retired sessions suppress stale notifications.
 
-## Editor document API and host operations (A3)
+## Editor document API and host operations
 
 **Public API migration from 0.1.9:** native Import/Export and Publish facade methods were removed;
 application-level Import/Export/Validate/Publish controls and validation reporting now belong to the host.
 Add the Integration PackageReference above and move file selection, downloads and operation feedback to your host.
 Do not replace removed methods with editor internals or source/DLL references.
 
-| Previous integration | A3 host responsibility |
+| Previous integration | Host responsibility |
 | --- | --- |
 | `ImportNativeDocumentAsync` | Deserialize bytes, check native version with the migrator, call `SetDocumentAsync` with saved-routing verification. |
 | `ExportNativeDocumentAsync` | Capture with `GetDocumentAsync`, serialize, download, acknowledge the matching native save checkpoint only after successful storage. |
@@ -272,9 +301,10 @@ Do not replace removed methods with editor internals or source/DLL references.
 `BpmnDocumentSerializer` and `BpmnDocumentMigrator` are static services. Create `BpmnDocumentValidator` and
 `PublishingPackageGenerator` as host-owned services. Native JSON is the full-fidelity persistence format;
 BPMN XML is a potentially lossy interchange format and must not acknowledge a native save checkpoint.
-See the source Demo below for composition, technical rejection handling and validation-state invalidation.
+See the [source Demo](#source-demo) and host operation sequence below for composition,
+technical rejection handling and validation-state invalidation.
 
-The canonical document remains `DocumentSnapshot` from `Inceptus.DocumentEngine.Contracts.Documents`.
+The canonical document remains `DocumentSnapshot` from `Inceptus.DiagramEngine.Contracts.Documents`.
 The reusable editor implements `IBpmnDocumentEditor`. Its document API is:
 
 ```csharp
@@ -295,7 +325,7 @@ Inspect `Succeeded`, `Status`, `Snapshot` and `Diagnostics` on document results.
 `ImportNativeDocumentAsync`, `ExportNativeDocumentAsync` or `PublishAsync`, or renders Import/Export/Validate/Publish controls.
 Immutable file-result and save-checkpoint contracts remain available to hosts.
 
-The internal demo's `BpmnDemoHost` and `DemoDocumentOperations` are the reference host implementation:
+The source Demo's `BpmnDemoHost` and `DemoDocumentOperations` are the reference host implementation:
 
 - Import: host reads bytes, `BpmnDocumentSerializer.Deserialize`, `BpmnDocumentMigrator.Migrate`,
   then `SetDocumentAsync` with the existing atomic attachment/integrity checks.
@@ -350,8 +380,8 @@ include model-validation findings. Failure returns neither a partial Document no
 | Process roots / nested scopes | Top-level processes and collaborations; owned scopes become embedded SubProcesses. No executable behavior is claimed. |
 | Events | None Start/End; intermediate Message/Signal catch/throw and Timer catch; Timer/Message/Signal Boundary Events with attachment and interruption flag. |
 | Tasks / gateways | Task, User, Manual, Service, Send, Receive; Exclusive, Inclusive, Parallel, Event-based gateways. |
-| Flows | Sequence and Message Flows, endpoint IDs, names and documentation; existing A2 endpoint/ownership rules apply. |
-| Participants / Pools / Lanes | Standalone A2 Pool becomes a Participant/process. Pools assigned to one A2 Participant become lanes of its process. Embedded SubProcess Pools become lanes. Explicit membership is authoritative; legacy process references do not infer membership. |
+| Flows | Sequence and Message Flows, endpoint IDs, names and documentation; existing endpoint/ownership rules apply. |
+| Participants / Pools / Lanes | A standalone native Pool becomes a Participant/process. Pools assigned to one Participant become lanes of its process. Embedded SubProcess Pools become lanes. Explicit membership is authoritative; legacy process references do not infer membership. |
 | IDs / text | Valid XML IDs preserved; other native IDs encoded collision-free with diagnostics. Names and plain descriptions map to name/documentation. |
 | DI | Shape bounds, saved caption bounds, explicit label positions and ordered saved connector waypoints. Existing projection supplies Pool/Participant envelopes. |
 
@@ -367,7 +397,7 @@ Unsupported BPMN data objects/stores/associations, execution expressions, resour
 choreography/conversation content, nested lane hierarchy, extra diagram representations, foreign extensions and attributes are
 ignored and logged. Unmapped process information has no native process-object property bag and is logged as ignored; compatible
 defaults and neutral interchange metadata are accepted by the import profile below. Multiple documentation
-blocks become one plain-text description. Black-box Participants use empty A2 Pools; direct Participant endpoints use the existing
+blocks become one plain-text description. Black-box Participants use empty native Pools; direct Participant endpoints use the existing
 Participant header plus an assigned Pool. The absence of a process/black-box marker is not preserved on subsequent export.
 
 Native Code/ElementNumber, publishing metadata other than the exported definitions name, revision, custom/profile properties,
@@ -407,7 +437,7 @@ SubProcess breadcrumbs remain available, and legacy native documents with peer r
 Round-trip tests compare supported types, names/descriptions, containment, membership, topology and representable DI; they do not use
 XML bytes or whole `DocumentSnapshot.Equals()` as the interchange criterion.
 
-The internal demo offers compact **Import** and **Export** format menus: **Inceptus JSON** (full fidelity) and
+The source Demo offers compact **Import** and **Export** format menus: **Inceptus JSON** (full fidelity) and
 **BPMN 2.0.2** (potentially lossy interchange). BPMN import uses `.xml` (`.bpmn` remains an accepted alias), accepts files up to 16 MiB and uses
 `ImportAsync` with the existing routing preparer, notation registrations and bundled browser font measurements.
 The host passes the prepared snapshot to `SetDocumentAsync`; failed conversion or edits made during preparation
@@ -421,7 +451,7 @@ the report and hides the counts again; it does not run validation automatically.
 Publish retains its existing validation and publication behavior.
 
 `Bpmn202ImportProfile.xml` is the authoritative declarative policy for interpreting BPMN 2.0.2 during import.
-It lives in `src/Inceptus.Bpmn.Integration`, with namespace `urn:inceptus:bpmn:import-profile:1`, profile version `1`,
+It uses namespace `urn:inceptus:bpmn:import-profile:1`, profile version `1`,
 standard `BPMN`, and standard version `2.0.2`. **BPMN export is code-defined and is not configured by the import profile.**
 The adjacent `Bpmn202ImportProfile.xsd` validates the vocabulary; the loader also rejects conflicting rules,
 unresolved/unknown element QNames, unknown attributes and unsupported action/strategy combinations. Both files are embedded
@@ -498,7 +528,7 @@ var exported = BpmnStandardConverter.Export(document); // no profile dependency 
 
 Invalid configuration throws `FormatException` before conversion. Alternate profiles can change supported classifications,
 report codes/messages and aggregation; they cannot introduce new semantic construction or geometry algorithms. The profile does
-not perform model validation. Parsing, reference/attachment integrity, A2 ownership, semantic construction and routing preparation
+not perform model validation. Parsing, reference/attachment integrity, ownership, semantic construction and routing preparation
 remain in converter code. `ConversionLog` still contains only `Ignored`/`Omitted` losses; technical failures remain in `Diagnostics`,
 and explicit host **Validate** independently owns model-quality findings.
 
@@ -622,16 +652,19 @@ Host Publish failures and warnings remain visible outside the closed Publication
 
 Lower-layer APIs support deliberate headless or browser/session composition, with their own ownership and extension contracts. The modeler's RCL remains the ordinary composition authority. Historical `BpmnPluginRegistration` milestone selectors are advanced historical compositions, not interchangeable support levels; the ordinary RCL currently uses `N100` and adds Organizational independently.
 
-`IBpmnModelerStartupDocumentProvider.GetInitialDocumentAsync(CancellationToken cancellationToken = default)` returns `ValueTask<Inceptus.DocumentEngine.Runtime.Documents.Document>`. This advanced startup-only seam transfers ownership of a **fresh Document per component**; it is not a live model handle, replacement callback or persistence service. Prefer `InitialDocument` for ordinary startup.
+`IBpmnModelerStartupDocumentProvider.GetInitialDocumentAsync(CancellationToken cancellationToken = default)` returns `ValueTask<Inceptus.DiagramEngine.Runtime.Documents.Document>`. This advanced startup-only seam transfers ownership of a **fresh Document per component**; it is not a live model handle, replacement callback or persistence service. Prefer `InitialDocument` for ordinary startup.
 
 The publicly generated `DocumentCanvas` and `ToolboxPanel` components are implementation-facing. Their visibility does not make them supported alternatives to `InceptusBpmnModeler`. The standalone `PublishedTokenRuntime.activateStart(startId, atMs)` method and frozen `startNodeIds` observation are advanced runtime integration surfaces; use the artifact's matching runtime. Viewer gesture helpers, `startAt` and control wiring are implementation-facing, not ordinary modeler APIs or a separate stable JavaScript SDK.
 
 ## Support limits and release identity
 
-Acceptance covers the tested standalone Blazor WebAssembly host and recorded browser conditions. It does not establish Interactive Server support, every browser/device, BPMN XML interoperability, arbitrary cross-version API compatibility or production workflow execution. Native Inceptus.Document and standalone PublishedProcess are distinct formats.
+Support covers standalone Blazor WebAssembly. It does not establish Interactive
+Server support, every browser/device, full BPMN XML interoperability, arbitrary
+cross-version API compatibility or production workflow execution. Native
+Inceptus.Document and standalone PublishedProcess are distinct formats.
 
-An ID/version identifies immutable distributed package bytes. Recover an existing release only from retained hash-matching artifacts. Rebuilding the same source version does not recreate release identity; unrecoverable bytes require a deliberate new candidate/version. Candidate promotion and external publication are separate decisions.
+An ID/version identifies immutable distributed package bytes. Source stepping
+requires the matching published portable symbols and publicly retrievable source;
+a breakpoint in application code alone does not verify package source stepping.
 
-The public source repository contains deliberate release snapshots. Public packages must be built from the corresponding public commit, which supplies repository commit metadata and SDK-native Source Link mappings. Version 0.1.3 prepares portable `.snupkg` symbols alongside each package. Source stepping requires the matching published symbols and publicly retrievable source; preparation alone does not establish nuget.org availability. Local application breakpoints remain distinct from stepping into packaged implementation.
-
-First-party code is licensed under [MIT](https://github.com/INCEPTUS-LABS/DocumentEngine/blob/main/LICENSE), Copyright (c) 2026 Inceptus Robert Prokopczuk. Redistributed third-party material retains its own terms; see [third-party notices](https://github.com/INCEPTUS-LABS/DocumentEngine/blob/main/THIRD-PARTY-NOTICES.md), including the separately bundled DejaVu font license. See [release notes](https://github.com/INCEPTUS-LABS/DocumentEngine/blob/main/RELEASE-NOTES.md). These documents are also included in each primary package.
+First-party code is licensed under [MIT](LICENSE), Copyright (c) 2026 Inceptus Robert Prokopczuk. Redistributed third-party material retains its own terms; see [third-party notices](THIRD-PARTY-NOTICES.md), including the separately bundled DejaVu font license. See [release notes](RELEASE-NOTES.md). These documents are also included in each primary package.

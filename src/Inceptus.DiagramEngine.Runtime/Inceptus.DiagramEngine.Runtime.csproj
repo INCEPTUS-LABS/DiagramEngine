@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <PackageId>Inceptus.DiagramEngine.Runtime</PackageId>
+    <AssemblyName>Inceptus.DiagramEngine.Runtime</AssemblyName>
+    <RootNamespace>Inceptus.DiagramEngine.Runtime</RootNamespace>
+    <IsPackable>true</IsPackable>
+    <Description>Headless document, command, history, projection, layout, routing, validation, and native persistence runtime for the Inceptus Diagram Engine.</Description>
+    <PackageTags>inceptus;diagram-engine;runtime;headless</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Inceptus.DiagramEngine.Contracts/Inceptus.DiagramEngine.Contracts.csproj" />
+  </ItemGroup>
+</Project>

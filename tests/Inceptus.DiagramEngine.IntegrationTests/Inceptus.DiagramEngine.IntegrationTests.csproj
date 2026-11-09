@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="../Inceptus.DiagramEngine.UnitTests/Blazor/DemoDocumentOperationTestExtensions.cs" Link="Support/DemoDocumentOperationTestExtensions.cs" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/Inceptus.DiagramEngine.Blazor/Inceptus.DiagramEngine.Blazor.csproj" />
+    <ProjectReference Include="../../src/Inceptus.DiagramEngine.Bpmn/Inceptus.DiagramEngine.Bpmn.csproj" />
+    <ProjectReference Include="../../src/Inceptus.DiagramEngine.Bpmn.Blazor/Inceptus.DiagramEngine.Bpmn.Blazor.csproj" />
+    <ProjectReference Include="../../src/Inceptus.DiagramEngine.Canvas2D/Inceptus.DiagramEngine.Canvas2D.csproj" />
+    <ProjectReference Include="../../src/Inceptus.DiagramEngine.Contracts/Inceptus.DiagramEngine.Contracts.csproj" />
+    <ProjectReference Include="../../src/Inceptus.DiagramEngine.Organizational/Inceptus.DiagramEngine.Organizational.csproj" />
+    <ProjectReference Include="../../src/Inceptus.DiagramEngine.Runtime/Inceptus.DiagramEngine.Runtime.csproj" />
+  </ItemGroup>
+</Project>

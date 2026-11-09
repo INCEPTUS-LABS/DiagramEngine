@@ -1,0 +1,97 @@
+using Inceptus.DiagramEngine.Contracts.Documents;
+using Inceptus.DiagramEngine.Contracts.ConnectionCreation;
+using Inceptus.DiagramEngine.Contracts.Presentation;
+using Inceptus.DiagramEngine.Contracts.Primitives;
+using Inceptus.DiagramEngine.Contracts.Visuals;
+
+namespace Inceptus.DiagramEngine.Contracts.EndpointReconnection;
+
+/// <summary>
+/// Immutable current-endpoint inputs used to match one endpoint-reconnection capability.
+/// </summary>
+public sealed class ConnectorEndpointReconnectionStartRequest
+{
+    public ConnectorEndpointReconnectionStartRequest(
+        DocumentSnapshot document,
+        DocumentRevision expectedRevision,
+        SemanticElementId relationshipId,
+        VisualStateId connectorVisualStateId,
+        ConnectorEndpointKind endpointKind,
+        SemanticElementId currentSemanticElementId,
+        ConnectorAnchorId currentAnchorId)
+        : this(null, null, document, expectedRevision, relationshipId, connectorVisualStateId,
+            endpointKind, currentSemanticElementId, currentAnchorId)
+    {
+    }
+
+    public ConnectorEndpointReconnectionStartRequest(
+        PresentationViewContext? presentationContext, PresentationViewPlan? presentationPlan,
+        DocumentSnapshot document, DocumentRevision expectedRevision,
+        SemanticElementId relationshipId, VisualStateId connectorVisualStateId,
+        ConnectorEndpointKind endpointKind, SemanticElementId currentSemanticElementId,
+        ConnectorAnchorId currentAnchorId)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        ArgumentNullException.ThrowIfNull(relationshipId);
+        ArgumentNullException.ThrowIfNull(connectorVisualStateId);
+        ArgumentNullException.ThrowIfNull(currentSemanticElementId);
+        ArgumentNullException.ThrowIfNull(currentAnchorId);
+        ValidateEndpointKind(endpointKind, nameof(endpointKind));
+        ValidateRevision(document, expectedRevision, nameof(expectedRevision));
+
+        Document = document;
+        ExpectedRevision = expectedRevision;
+        RelationshipId = relationshipId;
+        ConnectorVisualStateId = connectorVisualStateId;
+        EndpointKind = endpointKind;
+        CurrentSemanticElementId = currentSemanticElementId;
+        CurrentAnchorId = currentAnchorId;
+        ConnectionPresentationRequest.Validate(document, presentationContext, presentationPlan);
+        PresentationContext = presentationContext;
+        PresentationPlan = presentationPlan;
+    }
+
+    public DocumentSnapshot Document { get; }
+
+    public DocumentRevision ExpectedRevision { get; }
+
+    public SemanticElementId RelationshipId { get; }
+
+    public VisualStateId ConnectorVisualStateId { get; }
+
+    public ConnectorEndpointKind EndpointKind { get; }
+
+    public SemanticElementId CurrentSemanticElementId { get; }
+
+    public ConnectorAnchorId CurrentAnchorId { get; }
+
+    public PresentationViewContext? PresentationContext { get; }
+
+    public PresentationViewPlan? PresentationPlan { get; }
+
+    internal static void ValidateEndpointKind(
+        ConnectorEndpointKind endpointKind,
+        string parameterName)
+    {
+        if (!Enum.IsDefined(endpointKind))
+        {
+            throw new ArgumentOutOfRangeException(
+                parameterName,
+                endpointKind,
+                "The connector endpoint kind must be defined.");
+        }
+    }
+
+    internal static void ValidateRevision(
+        DocumentSnapshot document,
+        DocumentRevision expectedRevision,
+        string parameterName)
+    {
+        if (expectedRevision != document.Revision)
+        {
+            throw new ArgumentException(
+                "The expected endpoint-reconnection revision must match the supplied Document snapshot.",
+                parameterName);
+        }
+    }
+}

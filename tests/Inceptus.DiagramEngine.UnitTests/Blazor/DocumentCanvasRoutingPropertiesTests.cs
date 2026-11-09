@@ -1,0 +1,101 @@
+using Inceptus.DiagramEngine.Bpmn.Blazor.Presentation;
+using Inceptus.DiagramEngine.Bpmn.Semantics;
+using Inceptus.DiagramEngine.Contracts.Geometry;
+using Inceptus.DiagramEngine.Contracts.Primitives;
+using Inceptus.DiagramEngine.Contracts.Properties;
+using Inceptus.DiagramEngine.Contracts.Routing;
+using Inceptus.DiagramEngine.Contracts.Visuals;
+
+namespace Inceptus.DiagramEngine.UnitTests.Blazor;
+
+public sealed class DocumentCanvasRoutingPropertiesTests
+{
+    [Theory]
+    [InlineData(ConnectorRoutingType.Automatic, "automatic")]
+    [InlineData(ConnectorRoutingType.Straight, "straight")]
+    [InlineData(ConnectorRoutingType.Manual, "manual")]
+    public void EachTypedModeHasAStableFormValue(ConnectorRoutingType mode, string value)
+    {
+        var draft = new DocumentCanvasPropertiesDraft(Snapshot(mode));
+        Assert.True(draft.Authoritative.CanEditRoutingType);
+        Assert.Equal(value, draft.RoutingTypeValue);
+        Assert.True(draft.TryParseRoutingType(out var parsed));
+        Assert.Equal(mode, parsed);
+        Assert.False(draft.IsDirty);
+        Assert.True(draft.IsValid);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("Automatic")]
+    [InlineData("3")]
+    [InlineData("other")]
+    public void InvalidFormModeCannotBeApplied(string value)
+    {
+        var draft = new DocumentCanvasPropertiesDraft(Snapshot(ConnectorRoutingType.Automatic))
+        {
+            RoutingTypeValue = value,
+        };
+        Assert.True(draft.IsDirty);
+        Assert.False(draft.TryParseRoutingType(out _));
+        Assert.False(draft.IsValid);
+    }
+
+    [Fact]
+    public void ModeAndNameCanShareApplyWithoutAllowingOtherFieldGroups()
+    {
+        var draft = new DocumentCanvasPropertiesDraft(Snapshot(ConnectorRoutingType.Automatic))
+        {
+            RoutingTypeValue = "manual",
+        };
+        Assert.True(draft.IsRoutingTypeDirty);
+        Assert.True(draft.IsValid);
+        Assert.False(draft.HasConflictingChanges);
+        draft.DataFields[0].EditorValue = "Changed name";
+        Assert.False(draft.HasConflictingChanges);
+        Assert.True(draft.IsValid);
+        Assert.True(draft.IsCombinedConnectorNameAndRoutingChange);
+        draft.RoutingTypeValue = "automatic";
+        Assert.True(draft.IsValid);
+        Assert.True(draft.IsSemanticDirty);
+        Assert.False(draft.IsRoutingTypeDirty);
+    }
+
+    [Fact]
+    public void RoutingPlusAnotherDataFieldStillRequiresSeparateApply()
+    {
+        var original = Snapshot(ConnectorRoutingType.Automatic);
+        var description = new DocumentCanvasDataPropertySnapshot(
+            new ElementPropertyFieldDefinition(new ElementPropertyFieldId("description"), "Description", "description",
+                ElementPropertyEditorKind.MultilineText, SemanticPropertyMutationKind.Property, true, 1),
+            PropertyValue.FromText("Before"), "Before", true);
+        var draft = new DocumentCanvasPropertiesDraft(original with { DataFields = [.. original.DataFields, description] })
+        { RoutingTypeValue = "manual" };
+        draft.DataFields[1].EditorValue = "After";
+        Assert.True(draft.HasConflictingChanges);
+        Assert.False(draft.IsValid);
+        draft.DataFields[0].EditorValue = "New name";
+        Assert.True(draft.HasConflictingChanges);
+        Assert.False(draft.IsValid);
+    }
+
+    [Fact]
+    public void UnpreparedAndNonConnectorSnapshotsDoNotOfferModeEditing()
+    {
+        Assert.False(Snapshot(null).CanEditRoutingType);
+        Assert.False((Snapshot(ConnectorRoutingType.Automatic) with { IsConnector = false }).CanEditRoutingType);
+        var draft = new DocumentCanvasPropertiesDraft(Snapshot(null)) { RoutingTypeValue = "manual" };
+        Assert.False(draft.IsDirty);
+    }
+
+    private static DocumentCanvasPropertySnapshot Snapshot(ConnectorRoutingType? routingType) =>
+        new(new DocumentId("test:routing-properties"), new DocumentRevision(4), new VisualStateId("flow:visual"),
+            new SemanticElementId("flow"), BpmnSemanticTypes.SequenceFlow,
+            [new DocumentCanvasDataPropertySnapshot(
+                new ElementPropertyFieldDefinition(new ElementPropertyFieldId("name"), "Name", BpmnSemanticProperties.Name,
+                    ElementPropertyEditorKind.SingleLineText, SemanticPropertyMutationKind.Property, true, 0),
+                PropertyValue.FromText("Flow"), "Flow", true)],
+            VisualPlacementMode.Automatic, new RectD(0, 0, 0, 0), true,
+            new SemanticElementId("source"), new SemanticElementId("target"), ConnectorLabelPlacement.Default,
+            RoutingType: routingType);
+}

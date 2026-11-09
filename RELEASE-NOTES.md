@@ -1,61 +1,75 @@
 # Release notes
 
+## 1.0.0
+
+- Renames the six engine packages, assemblies and public namespace prefixes from
+  `Inceptus.DocumentEngine.*` to `Inceptus.DiagramEngine.*`: Contracts, Runtime,
+  Bpmn, Organizational, Canvas2D and Bpmn.Blazor. All six new package identities
+  start at **1.0.0**. This is an intentional source and binary compatibility break:
+  update PackageReferences, C#/Razor imports and qualified type references, then
+  recompile consumers. Mixed DocumentEngine/DiagramEngine dependency graphs are
+  unsupported.
+- Preserves `Inceptus.Bpmn.Integration` as its package, assembly and namespace
+  identity, with version **1.0.0**. Its dependencies and exposed engine types now
+  use DiagramEngine. Update all seven packages together. Canvas2D requires Runtime
+  exactly `[1.0.0]`; the other family dependencies retain minimum-version ranges.
+- Moves Blazor assets to `_content/Inceptus.DiagramEngine.Canvas2D/` and
+  `_content/Inceptus.DiagramEngine.Bpmn.Blazor/`. Update host-owned module and font
+  URLs and regenerate published Blazor assets; JavaScript filenames are unchanged.
+  Embedded publication resources and localisation use the new assembly identities.
+  `AddInceptusBpmnModeler()` remains in `Microsoft.Extensions.DependencyInjection`;
+  domain/API member names remain unchanged.
+- Renames the source solution to `Inceptus.DiagramEngine.sln` and the reference
+  Blazor Demo to `Inceptus.DiagramEngine.Blazor`, including its directory, assembly
+  and namespace. The Demo remains a public source example of modeler integration.
+- Preserves native `Inceptus.Document` formatVersion **2**,
+  `Inceptus.PublishedProcess` formatVersion **1**, BPMN XML conversion, stable
+  semantic/command identifiers, browser preference keys, editing, History, geometry,
+  rendering and execution behaviour. No document conversion is required solely
+  for the rebranding. Existing compatibility limits still apply: native v1 is
+  unsupported, incompatible saved caption geometry requires explicit recovery,
+  BPMN XML exchange covers a potentially lossy subset, and PublishedProcess is a
+  presentation animation model rather than a complete BPMN execution engine.
+- Corrects Release Razor source-path mapping under Visual Studio MSBuild by using
+  the SDK-selected, host-compatible Roslyn parser. Deterministic source paths,
+  embedded sources and portable symbols are preserved.
+- Targets **net10.0**, retains SDK **10.0.403** for source builds and Microsoft
+  ASP.NET Core Components, JSInterop and Localization dependencies at **10.0.14**.
+  Standalone Blazor WebAssembly remains the supported editor hosting model.
+- These notes describe the 1.0.0 migration. They do not announce completion of the
+  GitHub repository rename, public NuGet publication or legacy-package deprecation.
+
 ## 0.1.18
 
 - Updates Microsoft.AspNetCore.Components.Web, Microsoft.AspNetCore.Components.WebAssembly,
   Microsoft.AspNetCore.Components.WebAssembly.DevServer, Microsoft.JSInterop and
   Microsoft.Extensions.Localization from 10.0.5 to 10.0.14.
-- Updates Microsoft.NET.Test.Sdk from 18.0.1 to 18.11.0. Exact dependency-version
-  assertions, the release-package inspector and its regression fixture enforce
-  the approved versions.
-- Prepares the aligned seven-package 0.1.18 family using the verified complete
-  nuget.org publication 0.1.17 as its persisted baseline. Cumulative PackageReleaseNotes
-  includes exactly this 0.1.18 section; the complete historical RELEASE-NOTES.md
-  remains packaged unchanged below. Historical release artifacts remain immutable.
+- Updates Microsoft.NET.Test.Sdk from 18.0.1 to 18.11.0 for source builds and tests.
 - Retains SDK 10.0.403, net10.0, public APIs, package identities and dependency-range
   policies, existing package metadata, embedded resources, portable symbols and
   Source Link configuration. Native Inceptus.Document formatVersion 2 and
   PublishedProcess formatVersion 1 remain unchanged. No additional product behavior
-  is introduced; local preparation and External Demo acceptance precede separate
-  public publication.
+  is introduced.
 
 ## 0.1.17
 
-- Corrects NuGet PackageReleaseNotes metadata after the 0.1.16 publishing failure:
-  packages now include every recorded release-note section newer than the verified
-  previous publication and no newer than the version being built. With the complete
-  seven-package nuget.org baseline at 0.1.14, this release includes the original
-  0.1.15, 0.1.16 and 0.1.17 sections, preserving their headings, order and Markdown.
+- Corrects cumulative NuGet PackageReleaseNotes metadata to include changes since
+  the preceding publication, including the 0.1.15, 0.1.16 and 0.1.17 sections for
+  this version, preserving their headings, order and Markdown.
   The complete historical RELEASE-NOTES.md remains included in each package.
-- Adds explicit publication-baseline discovery through the official nuget.org API
-  for all seven package IDs. Partial or inconsistent publication stops preparation.
-  The verified baseline and package records are persisted in release configuration;
-  build and pack do not query nuget.org. Unused version-number gaps remain allowed.
-- Rejects missing target sections, ambiguous or empty included sections, malformed
-  version headings, invalid or inconsistent baselines and cumulative metadata over
-  NuGet's 35,000-character limit. Package inspection verifies the exact cumulative
-  notes in both primary and symbol metadata. Permanent regressions cover offline
-  packaging, publication consistency, persistence, Markdown and length boundaries.
 - Updates the pinned .NET SDK to 10.0.403 while retaining net10.0, existing external
   dependency versions, all seven package IDs, dependency policies, public APIs,
   package structure, resources, portable symbols and Source Link configuration.
-- Includes the previously prepared colour schemes and dedicated editor, Pool/Lane/
+- Includes colour schemes and their dedicated editor, Pool/Lane/
   Participant header colours, connector Properties/Delete toolbox, optional Event
   Names, horizontal/vertical connector Delete correction and exact Message Flow
   routing restoration through Undo/Redo, as described in the retained sections below.
   Native formatVersion 2 and PublishedProcess formatVersion 1 remain unchanged.
   Older saved Start/End caption geometry still requires the documented explicit
   recovery when incompatible; strict validation and OutsideBelow placement remain.
-- Uses a new package identity version without replacing historical artifacts or the
-  immutable public v0.1.16 commit/tag. Local preparation and External Demo acceptance
-  remain separate from public source, NuGet publication and deployment.
 
 ## 0.1.16
 
-- Prepares the aligned seven-package family for the next release after public
-  0.1.14. Includes the locally prepared 0.1.15 features and the manually accepted
-  Connector Delete and Message Flow History corrections. Existing 0.1.15 and
-  historical artifacts remain immutable; public publication is a separate step.
 - Adds White and Mixed document colour schemes with independent per-scheme
   background, border and text customisation for Start Events, Tasks, Gateways,
   End Events and Pool, Lane and Participant headers. Documents without appearance
@@ -96,14 +110,10 @@
   Project/repository URLs, portable symbols and Source Link configuration.
   Native Inceptus.Document formatVersion 2 and PublishedProcess formatVersion 1
   remain unchanged. The packaged editor owns these controls and corrections;
-  external hosts need no duplicate implementations. Local preparation does not
-  establish public Source Link or nuget.org availability.
+  external hosts need no duplicate implementations.
 
 ## 0.1.15
 
-- Prepares the aligned seven-package family after the committed document colour,
-  connector toolbox and optional Event Name changes. Local DEVELOPMENT artifacts
-  and public source/package publication remain separate release steps.
 - Adds White and Mixed document colour schemes with independent per-scheme
   background, border and text customisation for Start Events, Tasks, Gateways and
   End Events. Documents without appearance metadata use White. Appearance uses
@@ -135,14 +145,13 @@
   node/container/connector geometry.
 - Corrects Properties toolbox eligibility to follow actual editable schemas,
   including supported missing values. Improves placement-preview responsiveness
-  and prevents internal Demo toolbar churn on preview-only updates.
+  and prevents source Demo toolbar churn on preview-only updates.
 - Retains .NET 10, SDK 10.0.401, all seven package IDs, dependency policies and
   external dependency versions, public integration APIs, MIT/icon metadata, Project and repository
   URLs, portable symbols and Source Link configuration. Native Inceptus.Document
   formatVersion 2 and PublishedProcess formatVersion 1 remain unchanged. The
   reusable editor provides the new controls; package hosts do not need separate
-  implementations. Local preparation does not establish public Source Link or
-  nuget.org availability.
+  implementations.
 
 ## 0.1.14
 
@@ -158,9 +167,6 @@
 
 ## 0.1.12
 
-- Prepares the aligned seven-package family locally after the committed graphical
-  export, drawing-area display mode and touch interaction changes. Public source
-  provenance and package publication remain separate release steps.
 - Adds SVG Image and PNG Image export for the complete current active diagram
   level, including content beyond the viewport, independently of zoom and pan.
   Shared graphical preparation preserves retained geometry and excludes editor
@@ -183,20 +189,14 @@
   placement commits on release so a second contact does not create an unwanted
   element; single-finger editing and mouse placement remain available. Panning
   changes only transient viewport state and never the document or History.
-- Physical mobile-device, touchscreen and laptop-touchpad acceptance testing has
-  not yet been performed. It is deferred until publication of the public packages
-  and integration into the standalone InceptusBpmnEditor. Automated and simulated
-  browser checks do not constitute physical-device acceptance.
+- Physical mobile-device, touchscreen and laptop-touchpad compatibility has not
+  been established; automated and simulated browser checks do not establish it.
 - Retains all seven package IDs, net10.0, dependency policies, MIT metadata,
   package icons, Project URL, portable symbols and existing native/published data
-  formats. Local DEVELOPMENT artifacts do not establish public Source Link or
-  nuget.org availability.
+  formats.
 
 ## 0.1.11
 
-- Prepares the aligned seven-package family locally after the committed Snap to
-  Grid and editing improvements. Public source provenance and publication remain
-  separate release steps.
 - Adds shared `GridSettings` and an Editor Parameters form with independent Show
   Grid and Snap to Grid controls and configurable Grid Point Distance. Preferences
   persist in browser storage at editor level, outside Document state and History.
@@ -223,19 +223,15 @@
   and closes after successful Apply. Tasks, SubProcesses and Gateways support
   missing and multiline Description values with exact Undo/Redo; newly created
   elements use an empty Description instead of generated descriptive text.
-- Updates the NuGet Project URL to `https://inceptus.online/bpmn/editor/` and the
-  corresponding architecture and package-inspection assertions, including symbol
-  package metadata. Centralizes the existing package icon configuration. Retains
+- Updates the NuGet Project URL to `https://inceptus.online/bpmn/editor/` in primary
+  and symbol package metadata. Retains
   package IDs, net10.0, dependency policies, MIT metadata, documentation and
   portable-symbol packaging without changing native or published data formats.
 
 ## 0.1.10
 
-- Prepares the aligned seven-package family locally after the accepted A3,
-  A3.1 and A3.2 changes. Local preparation does not establish public NuGet
-  availability; public source provenance and publication remain separate steps.
 - Adds `Inceptus.Bpmn.Integration`, depending on Contracts, Runtime, Bpmn,
-  Organizational and Canvas2D without a dependency on editor UI or either Demo.
+  Organizational and Canvas2D without a dependency on editor UI.
   It exposes `BpmnDocumentSerializer`, `BpmnDocumentMigrator`,
   `BpmnDocumentValidator`, `BpmnStandardConverter` and `PublishingPackageGenerator`.
 - **Public API migration:** the reusable editor exchanges canonical immutable
@@ -268,7 +264,7 @@
 - Imports supported file content into one main Inceptus diagram, preserving
   nested SubProcess navigation. At most one effective Collaboration and one
   unassigned top-level Process are supported; ambiguous excess structures fail
-  explicitly before replacing the active document. A2 effective Participant,
+  explicitly before replacing the active document. Effective Participant,
   Pool/Lane and Sequence/Message Flow ownership remain authoritative. Export
   may represent that main diagram as several standard BPMN processes.
 - Retains existing History and routing preparation. Graphical hosts use
@@ -276,7 +272,7 @@
   preparer. DI geometry and connector waypoints are retained where representable
   and may be normalized; no second routing engine or arbitrary DI preservation
   guarantee is introduced.
-- The internal reference host offers compact Import/Export format menus,
+- The reference Demo offers compact Import/Export format menus,
   independent Validate and Publish actions, combined validation status/Issues,
   and dismissible feedback. Repeated conversion losses are grouped with affected
   source details. BPMN Export downloads `document.xml` as
@@ -285,8 +281,7 @@
 - Publishing uses a document and matching immutable presentation capture in
   `PublishingPackageGenerator`, retaining the standalone PublishedProcess ZIP
   formatVersion 1 and existing publication eligibility restrictions.
-- Extends the strict release inspector and existing workflows to all seven
-  package/symbol pairs, including Integration's embedded resources. Retains
+- Includes Integration's embedded resources in the seven-package family. Retains
   net10.0, existing external dependency versions, minimum family dependency
   ranges, exact Canvas2D-to-Runtime constraint, MIT metadata, documentation,
   third-party notices and portable symbols. NuGet package version, native
@@ -294,8 +289,6 @@
 
 ## 0.1.9
 
-- Prepares the aligned package family locally after the accepted A2 changes.
-  Public publication remains a separate step.
 - Adds validated switching between compatible concrete Task, catching/throwing
   intermediate Event, Boundary Event and Gateway types through Properties.
   Existing identities, compatible properties, geometry, attachments and
@@ -338,14 +331,14 @@
   presentation contexts, connector visuals, document-owned routing and path
   quality. BPMN policy remains in the plugin; immutable Document replacement,
   EditingSession, Command Processor and chronological History remain the
-  authorities. Existing constructor signatures covered by the A2.2 compatibility
-  regressions are retained; this is not a general cross-version API guarantee.
+  authorities. Existing constructor signatures are retained; this is not a general
+  cross-version API guarantee.
   The ordinary modeler lifecycle/file facade signatures are unchanged.
 - Retains native Inceptus.Document formatVersion 2 while adding optional anchor
   `normalizedPosition` and visual-model `documentRoutingStates` fields (with
   `documentLogical` routes). Missing fields retain prior defaults; older strict
   v2 readers reject documents containing these fields. No native v1 migration,
-  BPMN-standard conversion or A3 import/export/publishing refactoring is included.
+  BPMN-standard conversion or import/export/publishing API refactoring is included.
 - Retains PublishedProcess formatVersion 1. Publishing explicitly rejects
   document-level Collaboration presentations and Message Flow in Process views
   instead of treating communication as execution flow.
@@ -357,7 +350,7 @@
   hosts do not need an additional direct PackageReference.
 - Retains net10.0, the existing external dependency versions, aligned family
   dependencies and the exact Canvas2D-to-Runtime constraint. Includes the
-  committed Inceptus package icon, with the existing documentation, MIT license,
+  Inceptus package icon, with the existing documentation, MIT license,
   third-party notices and portable-symbol packaging requirements.
 
 ## 0.1.8
@@ -415,12 +408,12 @@
 
 ## 0.1.6 candidate
 
-- Prepares the coordinated six-package release checkpoint after A1.2.13. The published 0.1.5 identity remains immutable; Canvas2D requires Runtime exactly [0.1.6], and other family dependencies retain their minimum-version policy.
+- Aligns the six-package family at 0.1.6. Canvas2D requires Runtime exactly [0.1.6], and other family dependencies retain their minimum-version policy.
 - Adds BPMN SequenceFlow names with automatic near-source branch labels, editable through Properties, with manual placement, reset and exact Undo/Redo.
 - Includes dependency-safe pan reuse, renderer-resident frame caching, bounded Blazor presentation work and viewport culling, plus document-origin viewport normalization and stable boundary guides.
 - Reduces orthogonal routing work and bounds activity drag-preview, hit-testing and selection work while preserving the existing Document, command, History and derived-processing authorities.
-- Refreshes the canonical source Demo with named event-gateway branches alongside its activities, subprocess and boundary timer. No feature switch is required for the accepted fast paths.
-- Retains net10.0, existing native/PublishedProcess formats, dependency baselines and portable symbols. These are local preparation artifacts; public source provenance and publication remain separate release steps. A1.2.14 is not included.
+- Refreshes the source Demo with named event-gateway branches alongside its activities, subprocess and boundary timer. No feature switch is required for the performance improvements.
+- Retains net10.0, existing native/PublishedProcess formats, dependency baselines and portable symbols.
 
 ## 0.1.5 development
 
@@ -428,7 +421,7 @@
 - Simplifies element Properties to Data and Parameters, with readonly Type. Technical identities and visual geometry remain in the model and are no longer shown in this form.
 - Hides ordinary Properties for BPMN Events and elements without Data fields. Long-form fields such as Description use a wider, responsive dialog and a taller editor, while short fields stay compact.
 - Closes Properties after successful Apply and retains failed drafts for review. Existing commands, History, document events and data formats remain authoritative.
-- Starts the coordinated six-package 0.1.5 development line, including the P1.14 deterministic integration-event synchronization correction. Existing dependency rules and the public v0.1.4 release remain unchanged.
+- Aligns the six-package family at 0.1.5 and corrects deterministic integration-event synchronization. Existing dependency rules remain unchanged.
 
 ## 0.1.4 development
 
@@ -436,18 +429,16 @@
 - Uses the host's `CurrentUICulture` and Blazor re-rendering without a public culture parameter or modeler language selector. Localization is presentation state; it does not change Document identity, revision, History, selection, viewport or editing-session ownership.
 - Localizes toolbox labels, toolbar/status text, Properties labels, context actions, navigation fallbacks, New/Publication dialogs and presentation feedback. Canonical diagnostics and authored document values remain unchanged.
 - Keeps serialization, native import/export and PublishedProcess contracts English-based and culture-invariant. There is no public data-format change; the standalone exported viewer is outside this localization phase.
-- Advances all six development packages to 0.1.4, retaining Canvas2D's exact matching Runtime dependency and other existing dependency-range semantics. This phase does not publish packages or update package consumers.
+- Aligns all six packages at 0.1.4, retaining Canvas2D's exact matching Runtime dependency and other existing dependency-range semantics.
 
 ## 0.1.3 candidate
 
-- Prepares the first public-source release snapshot, with the approved GitHub RepositoryUrl and commit metadata derived from the public build checkout.
-- Uses the pinned .NET SDK's built-in Source Link and portable `.snupkg` symbols for all six packages. Public source and symbol retrieval must be verified before release.
+- Adds repository commit metadata, the pinned .NET SDK's built-in Source Link and portable `.snupkg` symbols for all six packages. Source stepping requires matching published symbols and retrievable source.
 - Maps Release Razor-generated source directives before compilation, preserving generated EmbeddedSource and authored-source stepping without embedding checkout-specific paths. Debug retains the SDK's normal source generator and Hot Reload support.
 - Aligns SDK Source Link roots with the existing compiler PathMap in ordinary local builds as well as CI builds.
-- Adds public-source validation and a separate, manually dispatched, tag-gated NuGet Trusted Publishing workflow. Preparation does not publish packages or create a release tag.
 - Corrects a session-shutdown lock-order inversion with in-flight document-change observation, preserving notification delivery and deterministic resource cleanup.
-- Preserves the accepted 0.1.2 D1 diagnostic lifetime correction and existing multiple-Start Publishing behavior. No public API, native format or PublishedProcess format changes are introduced.
-- Advances the aligned family to 0.1.3, including Canvas2D's exact Runtime [0.1.3] dependency. Other approved ranges remain unchanged; retained 0.1.0, 0.1.1 and 0.1.2 bytes remain immutable.
+- Preserves the 0.1.2 diagnostic lifetime correction and existing multiple-Start Publishing behavior. No public API, native format or PublishedProcess format changes are introduced.
+- Aligns the family at 0.1.3, including Canvas2D's exact Runtime [0.1.3] dependency. Other dependency ranges remain unchanged.
 
 ## 0.1.2 candidate
 
@@ -455,8 +446,6 @@
 - Keeps authoritative replacement, revision/scope changes, retirement/disposal and later interaction outcomes responsible for invalidating obsolete feedback.
 - Adds permanent surface-rebuild and diagnostic-invalidation regressions. There is no public API, native document format or PublishedProcess format change; the existing multiple-Start Publishing extension remains intact.
 - Advances the aligned six-package family to 0.1.2. Canvas2D retains its matching Runtime constraint; other dependency policies and approved release metadata are unchanged.
-
-The retained 0.1.1 candidate was promoted locally but did not pass final browser D1 acceptance: its rejection message disappeared after an alert-induced canvas resize. Its archives and failure evidence remain unchanged. The 0.1.2 source correction requires a deliberate source commit before final packing, audit, local promotion and package-only browser acceptance; none is implied by these notes.
 
 ## 0.1.1 candidate
 
@@ -466,4 +455,4 @@ The retained 0.1.1 candidate was promoted locally but did not pass final browser
 - Adds consumer integration, lifecycle, hosting and API support documentation, packaged README content, first-party MIT licensing and the approved product URL.
 - Defines support for the aligned six-package family. Canvas2D constrains Runtime to its matching version because of their internal History dependency; other dependency policies are unchanged.
 
-The candidate targets net10.0. It does not add BPMN XML interoperability, a production process-execution engine or new hosting-model support. Source Link and package implementation source debugging remain deferred until a public source repository exists. Candidate preparation does not imply local-feed promotion or public NuGet publication. Retained 0.1.0 artifacts remain unchanged.
+The candidate targets net10.0. It does not add BPMN XML interoperability, a production process-execution engine or new hosting-model support. Source Link and package implementation source debugging are not available in this version.

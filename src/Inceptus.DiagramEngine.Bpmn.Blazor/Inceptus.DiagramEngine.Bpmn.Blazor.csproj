@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk.Razor">
+  <PropertyGroup>
+    <PackageId>Inceptus.DiagramEngine.Bpmn.Blazor</PackageId>
+    <AssemblyName>Inceptus.DiagramEngine.Bpmn.Blazor</AssemblyName>
+    <RootNamespace>Inceptus.DiagramEngine.Bpmn.Blazor</RootNamespace>
+    <IsPackable>true</IsPackable>
+    <Description>BPMN modeler components and browser presentation integration for the Inceptus Diagram Engine.</Description>
+    <PackageTags>inceptus;diagram-engine;bpmn;blazor;modeler</PackageTags>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <!-- Razor's source generator embeds physical path literals before Roslyn applies PathMap.
+         Release uses SDK-generated files so their directives can be mapped before compilation.
+         Debug retains source generation and its normal Hot Reload support. -->
+    <UseRazorSourceGenerator>false</UseRazorSourceGenerator>
+    <!-- Windows qualifies /_/ directives with the current drive before recording authored documents.
+         Map that virtual root too, using native separators so compiler prefix matching is exact. -->
+    <PathMap>$(PathMap),$([System.IO.Path]::GetPathRoot('$(MSBuildProjectDirectory)'))_$([System.IO.Path]::DirectorySeparatorChar)=/_/</PathMap>
+  </PropertyGroup>
+
+  <Import Project="../../build/RazorSourcePaths.targets" />
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Components.Web" />
+    <PackageReference Include="Microsoft.JSInterop" />
+    <PackageReference Include="Microsoft.Extensions.Localization" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Inceptus.DiagramEngine.Contracts/Inceptus.DiagramEngine.Contracts.csproj" />
+    <ProjectReference Include="../Inceptus.DiagramEngine.Runtime/Inceptus.DiagramEngine.Runtime.csproj" />
+    <ProjectReference Include="../Inceptus.DiagramEngine.Canvas2D/Inceptus.DiagramEngine.Canvas2D.csproj" />
+    <ProjectReference Include="../Inceptus.DiagramEngine.Bpmn/Inceptus.DiagramEngine.Bpmn.csproj" />
+    <ProjectReference Include="../Inceptus.DiagramEngine.Organizational/Inceptus.DiagramEngine.Organizational.csproj" />
+  </ItemGroup>
+</Project>

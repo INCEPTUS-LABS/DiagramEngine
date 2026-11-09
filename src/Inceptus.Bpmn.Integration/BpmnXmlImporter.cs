@@ -1,16 +1,16 @@
 using System.Xml;
 using System.Xml.Linq;
-using Inceptus.DocumentEngine.Bpmn.Semantics;
-using Inceptus.DocumentEngine.Contracts.Documents;
-using Inceptus.DocumentEngine.Contracts.Metadata;
-using Inceptus.DocumentEngine.Contracts.Primitives;
-using Inceptus.DocumentEngine.Contracts.Profiles;
-using Inceptus.DocumentEngine.Contracts.Properties;
-using Inceptus.DocumentEngine.Contracts.Routing;
-using Inceptus.DocumentEngine.Contracts.Semantics;
-using Inceptus.DocumentEngine.Contracts.Visuals;
-using Inceptus.DocumentEngine.Organizational.Profiles;
-using Inceptus.DocumentEngine.Organizational.Semantics;
+using Inceptus.DiagramEngine.Bpmn.Semantics;
+using Inceptus.DiagramEngine.Contracts.Documents;
+using Inceptus.DiagramEngine.Contracts.Metadata;
+using Inceptus.DiagramEngine.Contracts.Primitives;
+using Inceptus.DiagramEngine.Contracts.Profiles;
+using Inceptus.DiagramEngine.Contracts.Properties;
+using Inceptus.DiagramEngine.Contracts.Routing;
+using Inceptus.DiagramEngine.Contracts.Semantics;
+using Inceptus.DiagramEngine.Contracts.Visuals;
+using Inceptus.DiagramEngine.Organizational.Profiles;
+using Inceptus.DiagramEngine.Organizational.Semantics;
 using static Inceptus.Bpmn.Integration.BpmnXmlVocabulary;
 
 namespace Inceptus.Bpmn.Integration;

@@ -1,5 +1,6 @@
 <Project>
-  <!-- Use the pinned SDK's parser, compiler and ordinary Razor file-generation targets.
+  <!-- Use the SDK-selected, host-compatible Roslyn parser. The application compiler and
+       ordinary Razor file-generation targets still come from the pinned SDK.
        This runs before compilation/embedding; it never rewrites assemblies or PDBs. -->
   <UsingTask TaskName="MapRazorSourcePaths" TaskFactory="RoslynCodeTaskFactory"
              AssemblyFile="$(MSBuildToolsPath)/Microsoft.Build.Tasks.Core.dll">
@@ -12,6 +13,6 @@
           AfterTargets="RazorGenerateComponentDefinition"
           Condition="'$(Configuration)' == 'Release' and '$(UseRazorSourceGenerator)' == 'false'">
     <MapRazorSourcePaths Files="@(_RazorComponentDefinition)" PathMap="$(PathMap)"
-                        RoslynDirectory="$(MSBuildToolsPath)/Roslyn/bincore" />
+                        RoslynDirectory="$(RoslynAssembliesPath)" />
   </Target>
 </Project>

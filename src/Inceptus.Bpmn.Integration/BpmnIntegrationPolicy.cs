@@ -1,11 +1,11 @@
-using Inceptus.DocumentEngine.Bpmn;
-using Inceptus.DocumentEngine.Bpmn.Semantics;
-using Inceptus.DocumentEngine.Contracts.Validation;
-using Inceptus.DocumentEngine.Contracts.Visuals;
-using Inceptus.DocumentEngine.Organizational;
-using Inceptus.DocumentEngine.Organizational.Scene;
-using Inceptus.DocumentEngine.Organizational.Semantics;
-using Inceptus.DocumentEngine.Runtime.Projection;
+using Inceptus.DiagramEngine.Bpmn;
+using Inceptus.DiagramEngine.Bpmn.Semantics;
+using Inceptus.DiagramEngine.Contracts.Validation;
+using Inceptus.DiagramEngine.Contracts.Visuals;
+using Inceptus.DiagramEngine.Organizational;
+using Inceptus.DiagramEngine.Organizational.Scene;
+using Inceptus.DiagramEngine.Organizational.Semantics;
+using Inceptus.DiagramEngine.Runtime.Projection;
 
 namespace Inceptus.Bpmn.Integration;
 

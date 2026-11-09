@@ -1,6 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <PackageId>Inceptus.Bpmn.Integration</PackageId>
+    <AssemblyName>Inceptus.Bpmn.Integration</AssemblyName>
+    <RootNamespace>Inceptus.Bpmn.Integration</RootNamespace>
     <IsPackable>true</IsPackable>
     <Description>Document serialization, compatibility, validation and publication integration for Inceptus BPMN hosts.</Description>
     <PackageTags>inceptus;bpmn;integration</PackageTags>
@@ -9,10 +11,10 @@
     <EmbeddedResource Include="Schemas/*.xsd" />
     <EmbeddedResource Include="Bpmn202ImportProfile.xml" />
     <EmbeddedResource Include="Bpmn202ImportProfile.xsd" />
-    <ProjectReference Include="../Inceptus.DocumentEngine.Bpmn/Inceptus.DocumentEngine.Bpmn.csproj" />
-    <ProjectReference Include="../Inceptus.DocumentEngine.Organizational/Inceptus.DocumentEngine.Organizational.csproj" />
-    <ProjectReference Include="../Inceptus.DocumentEngine.Runtime/Inceptus.DocumentEngine.Runtime.csproj" />
-    <ProjectReference Include="../Inceptus.DocumentEngine.Canvas2D/Inceptus.DocumentEngine.Canvas2D.csproj" />
-    <ProjectReference Include="../Inceptus.DocumentEngine.Contracts/Inceptus.DocumentEngine.Contracts.csproj" />
+    <ProjectReference Include="../Inceptus.DiagramEngine.Bpmn/Inceptus.DiagramEngine.Bpmn.csproj" />
+    <ProjectReference Include="../Inceptus.DiagramEngine.Organizational/Inceptus.DiagramEngine.Organizational.csproj" />
+    <ProjectReference Include="../Inceptus.DiagramEngine.Runtime/Inceptus.DiagramEngine.Runtime.csproj" />
+    <ProjectReference Include="../Inceptus.DiagramEngine.Canvas2D/Inceptus.DiagramEngine.Canvas2D.csproj" />
+    <ProjectReference Include="../Inceptus.DiagramEngine.Contracts/Inceptus.DiagramEngine.Contracts.csproj" />
   </ItemGroup>
 </Project>

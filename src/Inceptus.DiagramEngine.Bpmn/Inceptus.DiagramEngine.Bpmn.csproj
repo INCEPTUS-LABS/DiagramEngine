@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <PackageId>Inceptus.DiagramEngine.Bpmn</PackageId>
+    <AssemblyName>Inceptus.DiagramEngine.Bpmn</AssemblyName>
+    <RootNamespace>Inceptus.DiagramEngine.Bpmn</RootNamespace>
+    <IsPackable>true</IsPackable>
+    <Description>BPMN notation semantics, commands, validation, and plugin contributions for the Inceptus Diagram Engine.</Description>
+    <PackageTags>inceptus;diagram-engine;bpmn</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Inceptus.DiagramEngine.Contracts/Inceptus.DiagramEngine.Contracts.csproj" />
+    <ProjectReference Include="../Inceptus.DiagramEngine.Organizational/Inceptus.DiagramEngine.Organizational.csproj" />
+  </ItemGroup>
+</Project>

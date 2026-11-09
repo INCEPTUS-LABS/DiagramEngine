@@ -1,0 +1,194 @@
+using System.Collections.Immutable;
+using Inceptus.DiagramEngine.Contracts.Documents;
+using Inceptus.DiagramEngine.Contracts.EditorState;
+using Inceptus.DiagramEngine.Contracts.Commands;
+using Inceptus.DiagramEngine.Contracts.Primitives;
+using Inceptus.DiagramEngine.Contracts.Profiles;
+using Inceptus.DiagramEngine.Contracts.Visuals;
+using Inceptus.DiagramEngine.Canvas2D.Scene;
+using Inceptus.DiagramEngine.Contracts.Presentation;
+
+namespace Inceptus.DiagramEngine.Canvas2D.EditingSession;
+
+internal interface ISessionPipelineProcessing
+{
+    ValueTask<EditingSessionPipelineResult> RunDocumentPresentationAsync(DocumentSnapshot document,
+        DocumentPresentationContext context, EditorStateSnapshot editorState,
+        ModelProfileViewStateSnapshot profiles, ModelProfileElementViewStateSnapshot elements,
+        CancellationToken cancellationToken) => throw new NotSupportedException("Document presentation is not supported by this pipeline.");
+
+    ValueTask<EditingSessionPipelineResult> RebuildSceneForTransientPresentationAsync(
+        Canvas2DScene previousScene,
+        DocumentSnapshot document,
+        EditingSessionPipelineArtifacts artifacts,
+        EditorStateSnapshot editorState,
+        ModelProfileViewStateSnapshot modelProfileViewState,
+        ModelProfileElementViewStateSnapshot modelProfileElementViewState,
+        CancellationToken cancellationToken) =>
+        RebuildSceneAsync(document, artifacts, editorState, modelProfileViewState,
+            modelProfileElementViewState, cancellationToken);
+
+    bool CanDeferPanPresentation(
+        Canvas2DScene previousScene,
+        DocumentSnapshot document,
+        EditingSessionPipelineArtifacts artifacts,
+        EditorStateSnapshot editorState,
+        ModelProfileViewStateSnapshot modelProfileViewState,
+        ModelProfileElementViewStateSnapshot modelProfileElementViewState) => false;
+
+    ValueTask<EditingSessionPipelineResult> RebuildSceneForPanAsync(
+        Canvas2DScene previousScene,
+        DocumentSnapshot document,
+        EditingSessionPipelineArtifacts artifacts,
+        EditorStateSnapshot editorState,
+        ModelProfileViewStateSnapshot modelProfileViewState,
+        ModelProfileElementViewStateSnapshot modelProfileElementViewState,
+        CancellationToken cancellationToken) =>
+        RebuildSceneAsync(document, artifacts, editorState, modelProfileViewState,
+            modelProfileElementViewState, cancellationToken);
+
+    ValueTask<EditingSessionPipelineResult> RunFullAsync(
+        DocumentSnapshot document,
+        DocumentScopeId activeScopeId,
+        EditorStateSnapshot editorState,
+        CancellationToken cancellationToken);
+
+    ValueTask<EditingSessionPipelineResult> RunFullAsync(
+        DocumentSnapshot document,
+        DocumentScopeId activeScopeId,
+        EditorStateSnapshot editorState,
+        ModelProfileViewStateSnapshot modelProfileViewState,
+        CancellationToken cancellationToken) =>
+        RunFullAsync(document, activeScopeId, editorState, cancellationToken);
+
+    ValueTask<EditingSessionPipelineResult> RunFullAsync(
+        DocumentSnapshot document,
+        DocumentScopeId activeScopeId,
+        EditorStateSnapshot editorState,
+        ModelProfileViewStateSnapshot modelProfileViewState,
+        ModelProfileElementViewStateSnapshot modelProfileElementViewState,
+        CancellationToken cancellationToken) =>
+        RunFullAsync(
+            document,
+            activeScopeId,
+            editorState,
+            modelProfileViewState,
+            cancellationToken);
+
+    ValueTask<EditingSessionPipelineResult> RunPreservingNodeLayoutAsync(
+        DocumentSnapshot document,
+        DocumentScopeId activeScopeId,
+        EditingSessionPipelineArtifacts previousArtifacts,
+        ImmutableArray<EditingSessionPipelineArtifacts> nodeLayoutHistory,
+        NodeGeometryPipelineImpact nodeGeometryImpact,
+        EditorStateSnapshot editorState,
+        CancellationToken cancellationToken);
+
+    ValueTask<EditingSessionPipelineResult> RunPreservingNodeLayoutAsync(
+        DocumentSnapshot document,
+        DocumentScopeId activeScopeId,
+        EditingSessionPipelineArtifacts previousArtifacts,
+        ImmutableArray<EditingSessionPipelineArtifacts> nodeLayoutHistory,
+        NodeGeometryPipelineImpact nodeGeometryImpact,
+        EditorStateSnapshot editorState,
+        ModelProfileViewStateSnapshot modelProfileViewState,
+        CancellationToken cancellationToken) =>
+        RunPreservingNodeLayoutAsync(
+            document,
+            activeScopeId,
+            previousArtifacts,
+            nodeLayoutHistory,
+            nodeGeometryImpact,
+            editorState,
+            cancellationToken);
+
+    ValueTask<EditingSessionPipelineResult> RunPreservingNodeLayoutAsync(
+        DocumentSnapshot document,
+        DocumentScopeId activeScopeId,
+        EditingSessionPipelineArtifacts previousArtifacts,
+        ImmutableArray<EditingSessionPipelineArtifacts> nodeLayoutHistory,
+        NodeGeometryPipelineImpact nodeGeometryImpact,
+        EditorStateSnapshot editorState,
+        ModelProfileViewStateSnapshot modelProfileViewState,
+        ModelProfileElementViewStateSnapshot modelProfileElementViewState,
+        CancellationToken cancellationToken) =>
+        RunPreservingNodeLayoutAsync(
+            document,
+            activeScopeId,
+            previousArtifacts,
+            nodeLayoutHistory,
+            nodeGeometryImpact,
+            editorState,
+            modelProfileViewState,
+            cancellationToken);
+
+    ValueTask<EditingSessionPipelineResult> RunPreservingScopeLayoutIfCompatibleAsync(
+        DocumentSnapshot document,
+        DocumentScopeId activeScopeId,
+        EditingSessionPipelineArtifacts previousArtifacts,
+        EditorStateSnapshot editorState,
+        CancellationToken cancellationToken) =>
+        RunFullAsync(document, activeScopeId, editorState, cancellationToken);
+
+    ValueTask<EditingSessionPipelineResult> RunPreservingScopeLayoutIfCompatibleAsync(
+        DocumentSnapshot document,
+        DocumentScopeId activeScopeId,
+        EditingSessionPipelineArtifacts previousArtifacts,
+        EditorStateSnapshot editorState,
+        ModelProfileViewStateSnapshot modelProfileViewState,
+        CancellationToken cancellationToken) =>
+        RunPreservingScopeLayoutIfCompatibleAsync(
+            document,
+            activeScopeId,
+            previousArtifacts,
+            editorState,
+            cancellationToken);
+
+    ValueTask<EditingSessionPipelineResult> RunPreservingScopeLayoutIfCompatibleAsync(
+        DocumentSnapshot document,
+        DocumentScopeId activeScopeId,
+        EditingSessionPipelineArtifacts previousArtifacts,
+        EditorStateSnapshot editorState,
+        ModelProfileViewStateSnapshot modelProfileViewState,
+        ModelProfileElementViewStateSnapshot modelProfileElementViewState,
+        CancellationToken cancellationToken) =>
+        RunPreservingScopeLayoutIfCompatibleAsync(
+            document,
+            activeScopeId,
+            previousArtifacts,
+            editorState,
+            modelProfileViewState,
+            cancellationToken);
+
+    ValueTask<EditingSessionPipelineResult> RebuildSceneAsync(
+        EditingSessionPipelineArtifacts artifacts,
+        VisualModelSnapshot visualModel,
+        EditorStateSnapshot editorState,
+        CancellationToken cancellationToken);
+
+    ValueTask<EditingSessionPipelineResult> RebuildSceneAsync(
+        DocumentSnapshot document,
+        EditingSessionPipelineArtifacts artifacts,
+        EditorStateSnapshot editorState,
+        ModelProfileViewStateSnapshot modelProfileViewState,
+        CancellationToken cancellationToken) =>
+        RebuildSceneAsync(
+            artifacts,
+            document.VisualModel,
+            editorState,
+            cancellationToken);
+
+    ValueTask<EditingSessionPipelineResult> RebuildSceneAsync(
+        DocumentSnapshot document,
+        EditingSessionPipelineArtifacts artifacts,
+        EditorStateSnapshot editorState,
+        ModelProfileViewStateSnapshot modelProfileViewState,
+        ModelProfileElementViewStateSnapshot modelProfileElementViewState,
+        CancellationToken cancellationToken) =>
+        RebuildSceneAsync(
+            document,
+            artifacts,
+            editorState,
+            modelProfileViewState,
+            cancellationToken);
+}

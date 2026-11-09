@@ -1,11 +1,11 @@
 using System.Xml;
 using System.Xml.Linq;
-using Inceptus.DocumentEngine.Bpmn.Semantics;
-using Inceptus.DocumentEngine.Contracts.Documents;
-using Inceptus.DocumentEngine.Contracts.Primitives;
-using Inceptus.DocumentEngine.Contracts.Properties;
-using Inceptus.DocumentEngine.Contracts.Semantics;
-using Inceptus.DocumentEngine.Organizational.Semantics;
+using Inceptus.DiagramEngine.Bpmn.Semantics;
+using Inceptus.DiagramEngine.Contracts.Documents;
+using Inceptus.DiagramEngine.Contracts.Primitives;
+using Inceptus.DiagramEngine.Contracts.Properties;
+using Inceptus.DiagramEngine.Contracts.Semantics;
+using Inceptus.DiagramEngine.Organizational.Semantics;
 using static Inceptus.Bpmn.Integration.BpmnXmlVocabulary;
 
 namespace Inceptus.Bpmn.Integration;
@@ -343,7 +343,7 @@ internal sealed partial class BpmnXmlExporter
         }
         foreach (var profile in _document.SemanticModel.ModelProfiles.AvailableProfileIds)
             _log.Omit(_document.DocumentId.Value, profile.Value, "Native profile availability is not a BPMN property; representable Organizational membership is converted separately.");
-        foreach (var assignment in _document.SemanticModel.ProfileAssignments.Where(assignment => assignment.ProfileId != Inceptus.DocumentEngine.Organizational.Profiles.OrganizationalModelProfile.Id))
+        foreach (var assignment in _document.SemanticModel.ProfileAssignments.Where(assignment => assignment.ProfileId != Inceptus.DiagramEngine.Organizational.Profiles.OrganizationalModelProfile.Id))
             _log.Omit(assignment.SemanticElementId.Value, assignment.ProfileId.Value, "Non-Organizational profile assignment has no BPMN representation.");
     }
 }

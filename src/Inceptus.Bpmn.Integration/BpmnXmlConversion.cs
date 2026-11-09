@@ -1,11 +1,11 @@
 using System.Xml;
 using System.Xml.Linq;
-using Inceptus.DocumentEngine.Bpmn.Semantics;
-using Inceptus.DocumentEngine.Contracts.Diagnostics;
-using Inceptus.DocumentEngine.Contracts.Documents;
-using Inceptus.DocumentEngine.Contracts.Primitives;
-using Inceptus.DocumentEngine.Contracts.Properties;
-using Inceptus.DocumentEngine.Runtime.Documents;
+using Inceptus.DiagramEngine.Bpmn.Semantics;
+using Inceptus.DiagramEngine.Contracts.Diagnostics;
+using Inceptus.DiagramEngine.Contracts.Documents;
+using Inceptus.DiagramEngine.Contracts.Primitives;
+using Inceptus.DiagramEngine.Contracts.Properties;
+using Inceptus.DiagramEngine.Runtime.Documents;
 
 namespace Inceptus.Bpmn.Integration;
 

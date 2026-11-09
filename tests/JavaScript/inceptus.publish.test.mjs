@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { runInThisContext } from "node:vm";
 
 const publishRuntimeUrl = new URL(
-    "../../src/Inceptus.DocumentEngine.Canvas2D/Publishing/Assets/inceptus.publish.js",
+    "../../src/Inceptus.DiagramEngine.Canvas2D/Publishing/Assets/inceptus.publish.js",
     import.meta.url);
 runInThisContext(readFileSync(publishRuntimeUrl, "utf8"), {
     filename: fileURLToPath(publishRuntimeUrl)

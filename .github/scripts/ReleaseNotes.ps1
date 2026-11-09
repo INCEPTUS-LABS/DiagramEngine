@@ -1,8 +1,8 @@
 # Shared release-preparation and inspection functions. Loading this file performs no network access.
-$documentEnginePackageIds = @(
-    'Inceptus.DocumentEngine.Contracts', 'Inceptus.DocumentEngine.Runtime', 'Inceptus.DocumentEngine.Bpmn',
-    'Inceptus.DocumentEngine.Organizational', 'Inceptus.DocumentEngine.Canvas2D',
-    'Inceptus.DocumentEngine.Bpmn.Blazor', 'Inceptus.Bpmn.Integration'
+$diagramEnginePackageIds = @(
+    'Inceptus.DiagramEngine.Contracts', 'Inceptus.DiagramEngine.Runtime', 'Inceptus.DiagramEngine.Bpmn',
+    'Inceptus.DiagramEngine.Organizational', 'Inceptus.DiagramEngine.Canvas2D',
+    'Inceptus.DiagramEngine.Bpmn.Blazor', 'Inceptus.Bpmn.Integration'
 )
 function ConvertTo-ReleaseVersion([string]$Value) {
     $parsed = $null
@@ -11,27 +11,55 @@ function ConvertTo-ReleaseVersion([string]$Value) {
     }
     return $parsed
 }
-function Assert-PublicationBaseline([string]$Version, [string]$PreviousPublishedVersion, $Packages) {
+function Assert-PublicationBaseline([string]$Version, $Packages) {
     $current = ConvertTo-ReleaseVersion $Version
-    $baseline = ConvertTo-ReleaseVersion $PreviousPublishedVersion
-    if ($baseline -ge $current -or
-        (@($Packages.PackageId | Sort-Object) -join ',') -cne (@($documentEnginePackageIds | Sort-Object) -join ',') -or
-        @($Packages | Where-Object { $_.PublishedVersion -cne $PreviousPublishedVersion }).Count -ne 0) {
+    if ($current -lt [version]'1.0.0' -or
+        (@($Packages.PackageId | Sort-Object) -join ',') -cne (@($diagramEnginePackageIds | Sort-Object) -join ',')) {
+        throw "Invalid or inconsistent publication baseline for $Version."
+    }
+    $initial = @($Packages | Where-Object { $_.State -ceq 'NeverPublished' }).Count -gt 0
+    $published = @()
+    foreach ($package in $Packages) {
+        if ($package.State -ceq 'NeverPublished') {
+            if ($Version -cne '1.0.0' -or $package.PackageId -ceq 'Inceptus.Bpmn.Integration' -or
+                -not [string]::IsNullOrEmpty($package.PublishedVersion)) {
+                throw "Invalid initial publication baseline: $($package.PackageId)."
+            }
+        } elseif ($package.State -ceq 'Published') {
+            $previous = ConvertTo-ReleaseVersion $package.PublishedVersion
+            if ($previous -ge $current -or ($initial -and
+                    ($package.PackageId -cne 'Inceptus.Bpmn.Integration' -or $previous -ge [version]'1.0.0')) -or
+                (-not $initial -and $previous -lt [version]'1.0.0')) {
+                throw "Invalid publication baseline for $($package.PackageId): $($package.PublishedVersion)."
+            }
+            $published += $package.PublishedVersion
+        } else { throw "Invalid publication baseline state: $($package.PackageId)." }
+    }
+    if (($initial -and $published.Count -ne 1) -or (-not $initial -and @($published | Select-Object -Unique).Count -ne 1)) {
         throw "Invalid or inconsistent publication baseline for $Version."
     }
 }
-function Get-CumulativeReleaseNotes([string]$Text, [string]$Version, [string]$PreviousPublishedVersion) {
+function Get-CumulativeReleaseNotes([string]$Text, [string]$Version, $PackageBaseline) {
     $current = ConvertTo-ReleaseVersion $Version
-    $baseline = ConvertTo-ReleaseVersion $PreviousPublishedVersion
-    if ($baseline -ge $current) { throw "Invalid publication baseline: $PreviousPublishedVersion must precede $Version." }
-    $text = $Text.Replace("`r`n", "`n").Replace("`r", "`n")
+    $initial = $PackageBaseline.State -ceq 'NeverPublished'
+    if ($initial) {
+        if ($Version -cne '1.0.0' -or -not [string]::IsNullOrEmpty($PackageBaseline.PublishedVersion)) {
+            throw 'Invalid initial publication baseline.'
+        }
+        $baseline = $null
+    } elseif ($PackageBaseline.State -ceq 'Published') {
+        $baseline = ConvertTo-ReleaseVersion $PackageBaseline.PublishedVersion
+        if ($baseline -ge $current) { throw 'Invalid publication baseline: predecessor must precede the candidate.' }
+    } else { throw 'Invalid publication baseline state.' }
+    $text = $Text.Replace([string][char]13 + [char]10, [string][char]10).Replace([char]13, [char]10)
     $headings = [regex]::Matches($text, '(?m)^##[ \t]+(?<version>[0-9]+\.[^\s]+)(?:[ \t]+[^\n]*)?$')
     $selected = [Collections.Generic.HashSet[version]]::new()
     $notes = [Text.StringBuilder]::new()
     for ($index = 0; $index -lt $headings.Count; $index++) {
         $heading = $headings[$index]
         $sectionVersion = ConvertTo-ReleaseVersion $heading.Groups['version'].Value
-        if ($sectionVersion -le $baseline -or $sectionVersion -gt $current) { continue }
+        if ($sectionVersion -gt $current -or ($initial -and $sectionVersion -ne $current) -or
+            (-not $initial -and $sectionVersion -le $baseline)) { continue }
         $end = if ($index + 1 -lt $headings.Count) { $headings[$index + 1].Index } else { $text.Length }
         $bodyStart = $heading.Index + $heading.Length
         if (-not $selected.Add($sectionVersion) -or [string]::IsNullOrWhiteSpace($text.Substring($bodyStart, $end - $bodyStart))) {
@@ -45,27 +73,50 @@ function Get-CumulativeReleaseNotes([string]$Text, [string]$Version, [string]$Pr
     }
     return $result
 }
+function Get-PublishedPackageVersions([string]$PackageId) {
+    if ($diagramEnginePackageIds -cnotcontains $PackageId) { throw "Unknown package: $PackageId." }
+    $uri = 'https://api.nuget.org/v3-flatcontainer/' + $PackageId.ToLowerInvariant() + '/index.json'
+    try { $response = Invoke-RestMethod -Uri $uri -ErrorAction Stop }
+    catch {
+        # Only a real HTTP 404 for a new identity means never published. DNS/auth/server errors fail closed.
+        if ($PackageId -cne 'Inceptus.Bpmn.Integration' -and $null -ne $_.Exception.Response -and
+            [int]$_.Exception.Response.StatusCode -eq 404) { return }
+        throw
+    }
+    if ($null -eq $response.versions -or @($response.versions).Count -eq 0) { throw "Empty or invalid version index: $PackageId." }
+    return $response.versions
+}
 function Resolve-PublicationBaseline($PackageVersions) {
-    if ((@($PackageVersions.Keys | Sort-Object) -join ',') -cne (@($documentEnginePackageIds | Sort-Object) -join ',')) {
+    if ((@($PackageVersions.Keys | Sort-Object) -join ',') -cne (@($diagramEnginePackageIds | Sort-Object) -join ',')) {
         throw 'Publication baseline requires exactly the seven package IDs.'
     }
     $parsed = @{}
-    foreach ($id in $documentEnginePackageIds) {
+    foreach ($id in $diagramEnginePackageIds) {
         $versions = @($PackageVersions[$id] | ForEach-Object { ConvertTo-ReleaseVersion $_ } | Sort-Object)
-        if ($versions.Count -eq 0 -or @($versions | Select-Object -Unique).Count -ne $versions.Count) {
-            throw "Missing or ambiguous published versions: $id"
+        if (@($versions | Select-Object -Unique).Count -ne $versions.Count -or
+            ($id -ceq 'Inceptus.Bpmn.Integration' -and $versions.Count -eq 0) -or
+            ($id -cne 'Inceptus.Bpmn.Integration' -and @($versions | Where-Object { $_ -lt [version]'1.0.0' }).Count -gt 0)) {
+            throw "Missing, invalid or ambiguous published versions: $id"
         }
         $parsed[$id] = $versions
     }
-    # Earlier six-package releases predate Integration; compare from the family's first possible complete version.
-    $familyStart = @($documentEnginePackageIds | ForEach-Object { $parsed[$_][0] } | Sort-Object)[-1]
-    $versionsToCheck = @($parsed.Values | ForEach-Object { $_ } | Where-Object { $_ -ge $familyStart } | Sort-Object -Unique)
+    # The renamed coordinated family begins at 1.0.0. Integration's earlier history remains its own.
+    $versionsToCheck = @($parsed.Values | ForEach-Object { $_ } | Where-Object { $_ -ge [version]'1.0.0' } | Sort-Object -Unique)
     foreach ($version in $versionsToCheck) {
-        $missing = @($documentEnginePackageIds | Where-Object { $parsed[$_] -notcontains $version })
+        $missing = @($diagramEnginePackageIds | Where-Object { $parsed[$_] -notcontains $version })
         if ($missing.Count -gt 0) {
             throw "Partial or inconsistent publication at $version; missing packages: $($missing -join ', '). No baseline was persisted."
         }
     }
-    if ($versionsToCheck.Count -eq 0) { throw 'No complete publication baseline exists.' }
-    return $versionsToCheck[-1].ToString()
+    if ($versionsToCheck.Count -gt 0 -and $versionsToCheck[0] -ne [version]'1.0.0') {
+        throw 'The coordinated family must begin at 1.0.0.'
+    }
+    foreach ($id in $diagramEnginePackageIds) {
+        $versions = $parsed[$id]
+        [pscustomobject]@{
+            PackageId = $id
+            State = if ($versions.Count -eq 0) { 'NeverPublished' } else { 'Published' }
+            PublishedVersion = if ($versions.Count -eq 0) { '' } else { $versions[-1].ToString() }
+        }
+    }
 }

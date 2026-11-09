@@ -1,0 +1,156 @@
+using System.Collections.Immutable;
+using Inceptus.DiagramEngine.Contracts.Documents;
+using Inceptus.DiagramEngine.Contracts.Primitives;
+using Inceptus.DiagramEngine.Contracts.Profiles;
+using Inceptus.DiagramEngine.Contracts.Projection;
+using Inceptus.DiagramEngine.Contracts.Semantics;
+using Inceptus.DiagramEngine.Organizational.Profiles;
+
+namespace Inceptus.DiagramEngine.Organizational.Semantics;
+
+/// <summary>
+/// Read-only Organizational queries shared by commands, Scene contribution, and hosts.
+/// </summary>
+public static class OrganizationalSemantics
+{
+    public static SemanticElementId? GetParticipantId(SemanticElementSnapshot pool)
+    {
+        ArgumentNullException.ThrowIfNull(pool);
+        return pool.Properties.TryGetValue(OrganizationalSemanticProperties.ParticipantId, out var value) &&
+            value.Kind == Inceptus.DiagramEngine.Contracts.Properties.PropertyValueKind.Text &&
+            !string.IsNullOrWhiteSpace(value.TextValue) ? new SemanticElementId(value.TextValue) : null;
+    }
+
+    /// <summary>Resolves explicit membership; attached elements inherit their Activity's assignment.</summary>
+    public static SemanticElementId? GetOwningPoolId(ISemanticModelView model, SemanticElementId id)
+    {
+        ArgumentNullException.ThrowIfNull(model);
+        ArgumentNullException.ThrowIfNull(id);
+        var visited = new HashSet<SemanticElementId>();
+        while (visited.Add(id) && model.TryGetElement(id, out var element) && element is not null)
+        {
+            if (IsPool(element)) return element.Id;
+            if (element.AttachedToElementId is { } attached) { id = attached; continue; }
+            return TryGetAssignedPoolId(model, id, out var pool) ? pool : null;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Shared spatial ownership authority for presentation and routing preparation.
+    /// Attached nodes inherit their owner's assignment; null is the distinct Unassigned region.
+    /// </summary>
+    internal static SemanticElementId? ResolveSpatialPoolId(
+        DocumentSnapshot document,
+        DocumentScopeId activeScopeId,
+        ProjectedNode node,
+        HashSet<SemanticElementId> poolIds,
+        IOrganizationalElementEligibilityPolicy eligibilityPolicy)
+    {
+        var semanticElementId = node.PlacementHint?.BoundaryAttachment?.AttachedToElementId ??
+            node.Source.SemanticElementId;
+        if (!document.SemanticModel.TryGetElement(semanticElementId, out var element) ||
+            element is null ||
+            document.SemanticModel.GetScope(element.Id).Id != activeScopeId ||
+            (!IsDirectlyAssignable(element, eligibilityPolicy) &&
+             node.PlacementHint?.BoundaryAttachment is null) ||
+            !TryGetAssignedPoolId(document.SemanticModel, semanticElementId, out var poolId) ||
+            poolId is null || !poolIds.Contains(poolId))
+        {
+            return null;
+        }
+
+        return poolId;
+    }
+
+    public static bool IsPool(SemanticElementSnapshot element)
+    {
+        ArgumentNullException.ThrowIfNull(element);
+        return element.TypeId == OrganizationalSemanticTypes.Pool &&
+            element.ContainmentKind == SemanticElementContainmentKind.Scope &&
+            element.AttachedToElementId is null;
+    }
+
+    public static ImmutableArray<SemanticElementSnapshot> GetPoolsInScope(
+        DocumentSnapshot document,
+        DocumentScopeId scopeId)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        ArgumentNullException.ThrowIfNull(scopeId);
+        if (!document.SemanticModel.TryGetScope(scopeId, out _))
+        {
+            return [];
+        }
+
+        return document.SemanticModel.Elements
+            .Where(IsPool)
+            .Where(pool => document.SemanticModel.GetScope(pool.Id).Id == scopeId)
+            .OrderBy(static pool => pool.Id.Value, StringComparer.Ordinal)
+            .ToImmutableArray();
+    }
+
+    public static ImmutableArray<SemanticElementSnapshot> GetOrderedPoolsInScope(
+        DocumentSnapshot document,
+        DocumentScopeId scopeId)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        var pools = GetPoolsInScope(document, scopeId);
+        var orderByPoolId = document.VisualModel.ProfileElementPresentations
+            .Where(static presentation =>
+                presentation.ProfileId == OrganizationalModelProfile.Id)
+            .ToDictionary(
+                static presentation => presentation.SemanticElementId,
+                static presentation => presentation.Order);
+
+        // A partial legacy order has no complete authority. Fall back for the entire
+        // scope so the result remains stable and collision-free until the next create/reorder.
+        return pools.All(pool => orderByPoolId.ContainsKey(pool.Id))
+            ? pools.OrderBy(pool => orderByPoolId[pool.Id])
+                .ThenBy(static pool => pool.Id.Value, StringComparer.Ordinal)
+                .ToImmutableArray()
+            : pools;
+    }
+
+    public static bool TryGetAssignedPoolId(
+        ISemanticModelView semanticModel,
+        SemanticElementId semanticElementId,
+        out SemanticElementId? poolId)
+    {
+        ArgumentNullException.ThrowIfNull(semanticModel);
+        ArgumentNullException.ThrowIfNull(semanticElementId);
+        var assignment = semanticModel.ProfileAssignments.FirstOrDefault(candidate =>
+            candidate.ProfileId == OrganizationalModelProfile.Id &&
+            candidate.SemanticElementId == semanticElementId);
+        poolId = assignment?.ContainerSemanticElementId;
+        return poolId is not null;
+    }
+
+    public static ImmutableArray<SemanticElementSnapshot> GetAssignedElements(
+        DocumentSnapshot document,
+        SemanticElementId poolId)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        ArgumentNullException.ThrowIfNull(poolId);
+        var assignedIds = document.SemanticModel.ProfileAssignments
+            .Where(assignment =>
+                assignment.ProfileId == OrganizationalModelProfile.Id &&
+                assignment.ContainerSemanticElementId == poolId)
+            .Select(static assignment => assignment.SemanticElementId)
+            .ToHashSet();
+        return document.SemanticModel.Elements
+            .Where(element => assignedIds.Contains(element.Id))
+            .OrderBy(static element => element.Id.Value, StringComparer.Ordinal)
+            .ToImmutableArray();
+    }
+
+    public static bool IsDirectlyAssignable(
+        SemanticElementSnapshot element,
+        IOrganizationalElementEligibilityPolicy eligibilityPolicy)
+    {
+        ArgumentNullException.ThrowIfNull(element);
+        ArgumentNullException.ThrowIfNull(eligibilityPolicy);
+        return element.ContainmentKind == SemanticElementContainmentKind.Scope &&
+            element.AttachedToElementId is null &&
+            eligibilityPolicy.IsEligible(element);
+    }
+}

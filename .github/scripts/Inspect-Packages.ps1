@@ -167,6 +167,21 @@ public static class ReleaseSymbols
         if (links.Length > 1) throw new InvalidDataException("Competing Source Link records.");
         return links.SingleOrDefault() ?? "";
     }
+
+    public static void AssertAssemblyIdentity(byte[] assembly, string name, string version)
+    {
+        using var pe = new PEReader(new MemoryStream(assembly));
+        var reader = pe.GetMetadataReader();
+        var definition = reader.GetAssemblyDefinition();
+        if (reader.GetString(definition.Name) != name || definition.Version != new Version(version + ".0"))
+            throw new InvalidDataException("Unexpected assembly identity: " + name);
+        foreach (var handle in reader.AssemblyReferences)
+            if (reader.GetString(reader.GetAssemblyReference(handle).Name).StartsWith("Inceptus.DocumentEngine.", StringComparison.Ordinal))
+                throw new InvalidDataException("Legacy engine assembly reference: " + name);
+        foreach (var handle in reader.TypeDefinitions)
+            if (reader.GetString(reader.GetTypeDefinition(handle).Namespace).StartsWith("Inceptus.DocumentEngine.", StringComparison.Ordinal))
+                throw new InvalidDataException("Legacy engine type namespace: " + name);
+    }
 }
 '@ -ReferencedAssemblies @('System.Reflection.Metadata', 'System.Collections.Immutable', 'System.Collections', 'System.Linq', 'System.IO.Compression', 'System.Security.Cryptography', 'System.Text.RegularExpressions', 'System.Text.Encoding.Extensions', 'System.Memory')
 
@@ -196,15 +211,15 @@ function Read-StringResourceKeys([byte[]]$Bytes) {
         return $keys
     } finally { $reader.Dispose() }
 }
-$repository = 'https://github.com/INCEPTUS-LABS/DocumentEngine'
+$repository = 'https://github.com/INCEPTUS-LABS/DiagramEngine'
 $edges = [ordered]@{
-    'Inceptus.DocumentEngine.Contracts' = @()
-    'Inceptus.DocumentEngine.Runtime' = @('Inceptus.DocumentEngine.Contracts')
-    'Inceptus.DocumentEngine.Bpmn' = @('Inceptus.DocumentEngine.Contracts', 'Inceptus.DocumentEngine.Organizational')
-    'Inceptus.DocumentEngine.Organizational' = @('Inceptus.DocumentEngine.Contracts')
-    'Inceptus.DocumentEngine.Canvas2D' = @('Inceptus.DocumentEngine.Contracts', 'Inceptus.DocumentEngine.Runtime')
-    'Inceptus.DocumentEngine.Bpmn.Blazor' = @('Inceptus.DocumentEngine.Bpmn', 'Inceptus.DocumentEngine.Canvas2D', 'Inceptus.DocumentEngine.Contracts', 'Inceptus.DocumentEngine.Organizational', 'Inceptus.DocumentEngine.Runtime')
-    'Inceptus.Bpmn.Integration' = @('Inceptus.DocumentEngine.Bpmn', 'Inceptus.DocumentEngine.Canvas2D', 'Inceptus.DocumentEngine.Contracts', 'Inceptus.DocumentEngine.Organizational', 'Inceptus.DocumentEngine.Runtime')
+    'Inceptus.DiagramEngine.Contracts' = @()
+    'Inceptus.DiagramEngine.Runtime' = @('Inceptus.DiagramEngine.Contracts')
+    'Inceptus.DiagramEngine.Bpmn' = @('Inceptus.DiagramEngine.Contracts', 'Inceptus.DiagramEngine.Organizational')
+    'Inceptus.DiagramEngine.Organizational' = @('Inceptus.DiagramEngine.Contracts')
+    'Inceptus.DiagramEngine.Canvas2D' = @('Inceptus.DiagramEngine.Contracts', 'Inceptus.DiagramEngine.Runtime')
+    'Inceptus.DiagramEngine.Bpmn.Blazor' = @('Inceptus.DiagramEngine.Bpmn', 'Inceptus.DiagramEngine.Canvas2D', 'Inceptus.DiagramEngine.Contracts', 'Inceptus.DiagramEngine.Organizational', 'Inceptus.DiagramEngine.Runtime')
+    'Inceptus.Bpmn.Integration' = @('Inceptus.DiagramEngine.Bpmn', 'Inceptus.DiagramEngine.Canvas2D', 'Inceptus.DiagramEngine.Contracts', 'Inceptus.DiagramEngine.Organizational', 'Inceptus.DiagramEngine.Runtime')
 }
 $family = @($edges.Keys)
 function Assert-PackageInventory([string]$Directory, [string]$ExpectedVersion) {
@@ -218,12 +233,12 @@ function Assert-PackageDependencies([string]$Id, $Metadata, [string]$ExpectedVer
     $groups = @($Metadata.dependencies.group)
     Require ($groups.Count -eq 1 -and $groups[0].targetFramework -ceq 'net10.0') "Framework: $Id"
     $dependencies = @($groups[0].dependency | Where-Object { $null -ne $_ })
-    $external = if ($Id -ceq 'Inceptus.DocumentEngine.Canvas2D') { @('Microsoft.JSInterop') } elseif ($Id -ceq 'Inceptus.DocumentEngine.Bpmn.Blazor') { @('Microsoft.JSInterop', 'Microsoft.AspNetCore.Components.Web', 'Microsoft.Extensions.Localization') } else { @() }
+    $external = if ($Id -ceq 'Inceptus.DiagramEngine.Canvas2D') { @('Microsoft.JSInterop') } elseif ($Id -ceq 'Inceptus.DiagramEngine.Bpmn.Blazor') { @('Microsoft.JSInterop', 'Microsoft.AspNetCore.Components.Web', 'Microsoft.Extensions.Localization') } else { @() }
     $expectedIds = @($edges[$Id]) + $external
     Require ((@($dependencies.id | Sort-Object) -join ',') -ceq (@($expectedIds | Sort-Object) -join ',')) "Dependency identities: $Id"
     foreach ($dependency in $dependencies) {
         $range = if ($family -ccontains $dependency.id) {
-            if ($Id -ceq 'Inceptus.DocumentEngine.Canvas2D' -and $dependency.id -ceq 'Inceptus.DocumentEngine.Runtime') { "[$ExpectedVersion]" } else { $ExpectedVersion }
+            if ($Id -ceq 'Inceptus.DiagramEngine.Canvas2D' -and $dependency.id -ceq 'Inceptus.DiagramEngine.Runtime') { "[$ExpectedVersion]" } else { $ExpectedVersion }
         } else { '10.0.14' }
         Require ($dependency.version -ceq $range) "Dependency range: $Id -> $($dependency.id)"
     }
@@ -245,14 +260,25 @@ Require ($Commit -cmatch '^[0-9a-f]{40}$') 'Expected an actual full Git commit.'
 $configuration = [xml][IO.File]::ReadAllText((Join-Path $PWD 'Directory.Build.props'))
 $sourceVersion = $configuration.Project.PropertyGroup.Version
 Require ($Version -ceq $sourceVersion) 'Package version differs from Directory.Build.props.'
-$baseline = $configuration.Project.PropertyGroup.PreviousPublishedVersion
 $baselinePackages = @($configuration.Project.ItemGroup.PublicationBaselinePackage | ForEach-Object {
-    [pscustomobject]@{ PackageId = $_.Include; PublishedVersion = $_.PublishedVersion }
+    [pscustomobject]@{ PackageId = $_.Include; State = $_.State; PublishedVersion = [string]$_.PublishedVersion }
 })
-Assert-PublicationBaseline $Version $baseline $baselinePackages
-$expectedReleaseNotes = Get-CumulativeReleaseNotes ([IO.File]::ReadAllText((Join-Path $PWD 'RELEASE-NOTES.md'))) $Version $baseline
+Assert-PublicationBaseline $Version $baselinePackages
+Require ((git rev-parse HEAD) -ceq $Commit) 'Artifact source HEAD differs from the checkout.'
+$workingTreeStatus = @(git status --porcelain=v1 --untracked-files=all)
+Require ($LASTEXITCODE -eq 0) 'Could not inspect working-tree state.'
+$sourceFiles = @(git -c core.quotepath=false ls-files --cached --others --exclude-standard | Sort-Object -Unique)
+Require ($LASTEXITCODE -eq 0) 'Could not enumerate source inventory.'
+$sourceInventory = @($sourceFiles | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | ForEach-Object {
+    [ordered]@{ Path = $_; Sha256 = (Get-FileHash -LiteralPath $_ -Algorithm SHA256).Hash.ToLowerInvariant() }
+})
+Assert-PackageInventory $PackageDirectory $Version
+$sourceManifest = Join-Path $PackageDirectory 'source-state.json'
+[ordered]@{ SourceHead = $Commit; WorkingTreeDirty = $workingTreeStatus.Count -gt 0; GitStatus = $workingTreeStatus; Files = $sourceInventory } |
+    ConvertTo-Json -Depth 5 | Set-Content $sourceManifest
+$sourceManifestHash = (Get-FileHash $sourceManifest -Algorithm SHA256).Hash.ToLowerInvariant()
 if ($RequireSourceLink) {
-    Require (@(git status --porcelain=v1 --untracked-files=all).Count -eq 0) 'Public artifacts require a clean checkout.'
+    Require ($workingTreeStatus.Count -eq 0) 'Public artifacts require a clean checkout.'
     Require ((git rev-parse HEAD) -ceq $Commit) 'Artifact commit differs from the public checkout.'
     $trackedSources = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
     git -c core.quotepath=false ls-files | ForEach-Object { [void]$trackedSources.Add($_) }
@@ -260,6 +286,8 @@ if ($RequireSourceLink) {
 }
 Assert-PackageInventory $PackageDirectory $Version
 $records = foreach ($id in $family) {
+    $baseline = $baselinePackages | Where-Object { $_.PackageId -ceq $id }
+    $expectedReleaseNotes = Get-CumulativeReleaseNotes ([IO.File]::ReadAllText((Join-Path $PWD 'RELEASE-NOTES.md'))) $Version $baseline
     $archive = Join-Path $PackageDirectory "$id.$Version.nupkg"
     $symbolArchive = Join-Path $PackageDirectory "$id.$Version.snupkg"
     $zip = [IO.Compression.ZipFile]::OpenRead($archive)
@@ -291,6 +319,7 @@ $records = foreach ($id in $family) {
         $pdbName = "lib/net10.0/$id.pdb"
         $dll = Read-EntryBytes $zip $dllName
         $pdb = Read-EntryBytes $symbolZip $pdbName
+        [ReleaseSymbols]::AssertAssemblyIdentity($dll, $id, $Version)
         Require ($null -eq $zip.GetEntry($pdbName)) "PDB leaked into primary package: $id"
         $sourceLinkText = [ReleaseSymbols]::Inspect($pdb, $dll)
         $embeddedSources = [ReleaseSymbols]::EmbeddedSources($pdb)
@@ -298,6 +327,17 @@ $records = foreach ($id in $family) {
         if ($leaks.Count -gt 0) {
             $details = $leaks | ForEach-Object { "$($_.Document): $($_.ForbiddenPaths.Length) occurrence(s); $($_.ForbiddenPaths[0])" }
             throw "EmbeddedSource contains machine-specific source paths: $id`n$($details -join "`n")"
+        }
+        $documents = [ReleaseSymbols]::Documents($pdb)
+        $unmapped = @($documents | Where-Object { -not $_.StartsWith('/_/', [StringComparison]::Ordinal) })
+        Require ($unmapped.Count -eq 0) "Unmapped PDB document paths: $id $($unmapped -join ', ')"
+        Require (@($documents | Where-Object { $_.StartsWith("/_/src/$id/") }).Count -gt 0) "Missing package source documents: $id"
+        foreach ($document in $documents) {
+            if ($embeddedSources.Document -ccontains $document) { continue }
+            $relative = $document.Substring(3)
+            Require (Test-Path -LiteralPath $relative -PathType Leaf) "PDB source is missing from the inspected working tree: $id $document"
+            $source = [IO.File]::ReadAllBytes((Join-Path $PWD $relative))
+            Require ([ReleaseSymbols]::SourceMatches($pdb, $document, $source)) "Authored source checksum mismatch: $id $document"
         }
         if ($RequireSourceLink) {
             Require (-not [string]::IsNullOrWhiteSpace($sourceLinkText)) "Missing Source Link: $id"
@@ -308,7 +348,7 @@ $records = foreach ($id in $family) {
             Require ($unmapped.Count -eq 0) "Unmapped PDB document paths: $id $($unmapped -join ', ')"
             Require (@($documents | Where-Object { $_.StartsWith("/_/src/$id/") }).Count -gt 0) "Missing package source documents: $id"
             foreach ($url in $links.Values) {
-                Require ($url -ceq "https://raw.githubusercontent.com/INCEPTUS-LABS/DocumentEngine/$Commit/*") "Unexpected Source Link target: $id"
+                Require ($url -ceq "https://raw.githubusercontent.com/INCEPTUS-LABS/DiagramEngine/$Commit/*") "Unexpected Source Link target: $id"
             }
             foreach ($document in $documents) {
                 if ($embeddedSources.Document -ccontains $document) { continue }
@@ -321,22 +361,22 @@ $records = foreach ($id in $family) {
         $entries = @($zip.Entries.FullName)
         Require (@($entries | Where-Object { $_ -match '(?i)(^|/)(bin|obj|tests|demo|\.git)/|\.csproj$|\.user$|UnitTests|IntegrationTests|Inceptus\.DocumentEngine\.Blazor\.(dll|pdb)' }).Count -eq 0) "Unexpected package content: $id"
         $expectedAssemblies = @($dllName)
-        if ($id -ceq 'Inceptus.DocumentEngine.Bpmn.Blazor') {
+        if ($id -ceq 'Inceptus.DiagramEngine.Bpmn.Blazor') {
             $expectedAssemblies += @('pl', 'fr', 'de', 'es') | ForEach-Object { "lib/net10.0/$_/$id.resources.dll" }
         }
         $actualAssemblies = @($entries | Where-Object { $_ -match '\.dll$' } | Sort-Object)
         Require (($actualAssemblies -join ',') -ceq (($expectedAssemblies | Sort-Object) -join ',')) "Unexpected assembly set: $id"
         $uiResourceKeyCounts = [ordered]@{}
         if ($id -ceq 'Inceptus.Bpmn.Integration') { Assert-IntegrationResources $dll }
-        if ($id -ceq 'Inceptus.DocumentEngine.Canvas2D') {
+        if ($id -ceq 'Inceptus.DiagramEngine.Canvas2D') {
             Require ($entries -contains 'staticwebassets/inceptus.canvas2d.js') 'Canvas JavaScript missing.'
             foreach ($asset in @('index.html', 'inceptus.publish.js', 'styles.css')) {
-                $bytes = [ReleaseSymbols]::Resource($dll, "Inceptus.DocumentEngine.Canvas2D.Publishing.$asset")
+                $bytes = [ReleaseSymbols]::Resource($dll, "Inceptus.DiagramEngine.Canvas2D.Publishing.$asset")
                 $expected = [IO.File]::ReadAllBytes((Join-Path $PWD "src/$id/Publishing/Assets/$asset"))
                 Require ([Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($bytes)) -ceq [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($expected))) "Embedded Publish asset: $asset"
             }
         }
-        if ($id -ceq 'Inceptus.DocumentEngine.Bpmn.Blazor') {
+        if ($id -ceq 'Inceptus.DiagramEngine.Bpmn.Blazor') {
             $resourceBase = "$id.Resources.ModelerStrings"
             $neutralKeys = @(Read-StringResourceKeys ([ReleaseSymbols]::Resource($dll, "$resourceBase.resources")))
             $uiResourceKeyCounts['en'] = $neutralKeys.Count
@@ -357,8 +397,11 @@ $records = foreach ($id in $family) {
         [ordered]@{
             PackageId = $id; Version = $Version; Commit = $Commit
             PreparationOnly = -not [bool]$RequireSourceLink
+            WorkingTreeDirty = $workingTreeStatus.Count -gt 0
+            SourceStateSha256 = $sourceManifestHash
+            RemoteSourceRetrievalVerified = $false
             ReleaseNotesCharacters = $expectedReleaseNotes.Length
-            PreviousPublishedVersion = $baseline
+            PublicationBaseline = $baseline
             UIResourceKeyCounts = $uiResourceKeyCounts
             NupkgSha256 = (Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant()
             SnupkgSha256 = (Get-FileHash $symbolArchive -Algorithm SHA256).Hash.ToLowerInvariant()
