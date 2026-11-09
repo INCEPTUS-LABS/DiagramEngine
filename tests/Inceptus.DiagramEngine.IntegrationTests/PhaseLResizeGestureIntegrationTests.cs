@@ -616,10 +616,68 @@ public sealed class PhaseLResizeGestureIntegrationTests
         }
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task CommittedResizeResetsCursorRegardlessOfDispatchCompletionTiming(
+        bool dispatchCompletesBeforeReturn)
+    {
+        var scheduler = new ResizeDispatchScheduler(dispatchCompletesBeforeReturn);
+        var context = await AttachAsync(dispatchScheduler: scheduler);
+        await using var session = context.Session;
+        await using var interaction = new Canvas2DInteractionController(session);
+        scheduler.WaitForSessionIdle = () => session.WaitForIdleAsync().AsTask();
+        var initial = session.CaptureState();
+        var visual = FindVisual(context.Document.CaptureSnapshot(), "demo:alpha");
+        var start = Center(FindResizeHandle(
+            initial.CurrentScene!, visual.Id, Canvas2DResizeDirection.NorthEast).Bounds);
+        var finish = start + new VectorD(20d, 15d);
+
+        var pressed = await interaction.PointerPressedAsync(Pointer(
+            815, initial.CurrentScene!, start, button: 0, buttons: 1));
+        var moved = await interaction.PointerMovedAsync(Pointer(
+            815, pressed.SessionState.CurrentScene!, finish, buttons: 1));
+        var released = await interaction.PointerReleasedAsync(Pointer(
+            815, moved.SessionState.CurrentScene!, finish, button: 0));
+
+        Assert.Equal(Canvas2DInteractionStatus.Committed, released.Status);
+        Assert.True(released.PersistentOperation!.IsCommitted);
+        if (dispatchCompletesBeforeReturn)
+        {
+            Assert.Equal(EditingSessionStatus.Ready, released.SessionState.Status);
+            Assert.Equal(new DocumentRevision(1), released.SessionState.CurrentScene!.SourceRevision);
+        }
+        else
+        {
+            Assert.Equal(EditingSessionStatus.Rebuilding, released.SessionState.Status);
+            Assert.Null(released.SessionState.CurrentScene);
+        }
+        Assert.Equal(dispatchCompletesBeforeReturn ? 0 : 1, scheduler.PendingCount);
+        scheduler.RunPending();
+        await WaitForCommittedEventAndSessionIdleAsync(context.Document, session);
+        Assert.Equal(new DocumentRevision(1), context.Document.Revision);
+        Assert.Null(session.CaptureState().EditorState.ActiveGesture);
+        Assert.Equal(new HistoryStatus(1, true, false), session.CaptureState().HistoryStatus);
+        AssertBoundsEqual(new RectD(60d, 85d, 170d, 55d), FindVisualContent(
+            session.CaptureState().CurrentScene!, visual.Id).Bounds);
+        Assert.Equal([new DocumentRevision(1)], EventRevisions(context.Events));
+        Assert.Equal(1, context.ResizeProbe.InvocationCount);
+
+        // A later real hover must still resolve the resized handle normally.
+        var hover = await interaction.PointerMovedAsync(Pointer(
+            815, session.CaptureState().CurrentScene!, finish));
+        Assert.Equal("nesw-resize", hover.CssCursor);
+        Assert.Equal("default", released.CssCursor);
+    }
+
     private static async ValueTask<ResizeIntegrationContext> AttachAsync(
-        IDocumentChangedSubscriber? beforeRecording = null)
+        IDocumentChangedSubscriber? beforeRecording = null,
+        Inceptus.DiagramEngine.Runtime.Documents.IDocumentDispatchScheduler? dispatchScheduler = null)
     {
         var composition = NeutralDemoPipeline.CreateComposition();
+        var document = dispatchScheduler is null ? composition.Document :
+            new Inceptus.DiagramEngine.Runtime.Documents.Document(
+                composition.Document.CaptureSnapshot(), dispatchScheduler);
         var events = new RecordingSubscriber();
         var resizeProbe = new CountingCommandValidator();
         var source = composition.Configuration;
@@ -647,13 +705,13 @@ public sealed class PhaseLResizeGestureIntegrationTests
             "phase-l-resize-canvas",
             new Canvas2DSurfaceSize(960d, 640d, 2d))).Succeeded);
         var attachment = await EditingSession.AttachAsync(
-            composition.Document,
+            document,
             renderer,
             configuration);
         Assert.Equal(EditingSessionAttachStatus.Ready, attachment.Status);
         return new ResizeIntegrationContext(
             attachment.Session!,
-            composition.Document,
+            document,
             composition.Counters,
             execution,
             events,
@@ -865,6 +923,42 @@ public sealed class PhaseLResizeGestureIntegrationTests
         RecordingRenderExecution Execution,
         RecordingSubscriber Events,
         CountingCommandValidator ResizeProbe);
+
+    private sealed class ResizeDispatchScheduler(bool dispatchCompletesBeforeReturn) :
+        Inceptus.DiagramEngine.Runtime.Documents.IDocumentDispatchScheduler
+    {
+        private readonly Queue<Action> _pending = [];
+
+        internal Func<Task>? WaitForSessionIdle { get; set; }
+
+        internal int PendingCount => _pending.Count;
+
+        public bool TrySchedule(Action callback)
+        {
+            if (!dispatchCompletesBeforeReturn)
+            {
+                _pending.Enqueue(callback);
+                return true;
+            }
+
+            // Never invoke dispatch inline: preserve the scheduler contract while
+            // forcing the worker and its derived pipeline to win the completion race.
+            Task.Run(async () =>
+            {
+                callback();
+                await WaitForSessionIdle!();
+            }).WaitAsync(TimeSpan.FromSeconds(5)).GetAwaiter().GetResult();
+            return true;
+        }
+
+        internal void RunPending()
+        {
+            while (_pending.TryDequeue(out var callback))
+            {
+                callback();
+            }
+        }
+    }
 
     private sealed class GatedSubscriber : IDocumentChangedSubscriber
     {

@@ -2201,11 +2201,12 @@ public sealed partial class Canvas2DInteractionController : IAsyncDisposable
                 var idlePresentation = ResolvePointerPresentation(
                     committedState,
                     input.CssPoint);
-                var committedCursor = gesture.Kind is
-                    PersistentGestureKind.Move or
-                    PersistentGestureKind.BoundaryAttachmentMove
-                    ? "grab"
-                    : idlePresentation.CssCursor;
+                var committedCursor = gesture.Kind switch
+                {
+                    PersistentGestureKind.Move or PersistentGestureKind.BoundaryAttachmentMove => "grab",
+                    PersistentGestureKind.Resize => "default",
+                    _ => idlePresentation.CssCursor,
+                };
                 return new Canvas2DInteractionResult(
                     Canvas2DInteractionStatus.Committed,
                     committedState,
