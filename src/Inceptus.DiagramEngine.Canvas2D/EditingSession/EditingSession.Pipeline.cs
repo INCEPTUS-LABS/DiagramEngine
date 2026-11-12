@@ -931,6 +931,10 @@ public sealed partial class EditingSession
                     }
 
                     state = CaptureStateUnderLock();
+                    if (RejectsEditingState(editorState))
+                    {
+                        return ReadOnlyInteractionResult();
+                    }
                     editorState = NormalizeEditorStateViewport(
                         editorState, state.EditorState.Viewport, surfaceSize);
                     artifacts = _compatibleArtifacts;

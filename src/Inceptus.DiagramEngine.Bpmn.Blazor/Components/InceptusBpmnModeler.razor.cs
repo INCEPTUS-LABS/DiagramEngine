@@ -1,5 +1,6 @@
 using Inceptus.DiagramEngine.Bpmn.Blazor.Composition;
 using Inceptus.DiagramEngine.Bpmn.Blazor.Presentation;
+using Inceptus.DiagramEngine.Canvas2D.EditingSession;
 using Inceptus.DiagramEngine.Contracts.Documents;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
@@ -15,6 +16,18 @@ public partial class InceptusBpmnModeler : IDisposable, IBpmnDocumentEditor
     private BpmnModelerFacade? _facade;
     private DocumentCanvas? _canvas;
     private bool _disposed;
+    private EditingSessionAccessMode? _initialAccessMode;
+
+    /// <summary>Access policy captured once at initialization. Recreate the component to change it.</summary>
+    [Parameter]
+    public EditingSessionAccessMode AccessMode { get; set; } = EditingSessionAccessMode.Editable;
+
+    private void ValidateAccessMode()
+    {
+        if (!Enum.IsDefined(AccessMode)) throw new ArgumentOutOfRangeException(nameof(AccessMode));
+        if (_initialAccessMode is { } initial && initial != AccessMode)
+            throw new InvalidOperationException("The modeler's AccessMode cannot change during its lifetime.");
+    }
 
     /// <summary>Opens editor-wide settings; the optional close callback lets the host restore focus.</summary>
     public Task OpenSettingsAsync(Func<Task>? closed = null) =>
@@ -84,11 +97,13 @@ public partial class InceptusBpmnModeler : IDisposable, IBpmnDocumentEditor
 
     protected override void OnInitialized()
     {
+        if (!Enum.IsDefined(AccessMode)) throw new ArgumentOutOfRangeException(nameof(AccessMode));
+        _initialAccessMode = AccessMode;
         // The snapshot value is captured here, not read again on later parameter updates.
         var factory = Services.GetService<BpmnModelerCompositionFactory>() ??
             new BpmnModelerCompositionFactory(() => Services.GetServices<IBpmnModelerStartupDocumentProvider>());
         _facade?.Dispose();
-        _facade = new BpmnModelerFacade(factory.WithInitialDocument(InitialDocument), InvokeNotificationAsync);
+        _facade = new BpmnModelerFacade(factory.WithInitialDocument(InitialDocument).WithAccessMode(AccessMode), InvokeNotificationAsync);
         _facade.ViewChanged += HandleViewChanged;
     }
 
@@ -133,8 +148,15 @@ public partial class InceptusBpmnModeler : IDisposable, IBpmnDocumentEditor
 
                 try
                 {
+                    if (notification is BpmnApplicationActionDispatch action)
+                    {
+                        InvokeApplicationAction(action);
+                        return;
+                    }
                     var callback = notification switch
                     {
+                        BpmnSelectionChangedEventArgs selected when
+                            selected.Presentation.Stamp == Facade.CapturePresentation().Stamp => SelectionChanged.InvokeAsync(selected),
                         BpmnModelerReadyEventArgs ready => Ready.InvokeAsync(ready),
                         BpmnModelerDocumentChangedEventArgs changed => DocumentChanged.InvokeAsync(changed),
                         BpmnModelerOperationFailedEventArgs failed => OperationFailed.InvokeAsync(failed),

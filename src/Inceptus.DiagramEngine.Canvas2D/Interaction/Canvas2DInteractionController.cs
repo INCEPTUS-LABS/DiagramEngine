@@ -329,7 +329,8 @@ public sealed partial class Canvas2DInteractionController : IAsyncDisposable
         }
 #pragma warning restore CA1031
 
-        if (ConnectionToolState.GetSelection(observed.EditorState) is not null &&
+        if (observed.IsEditingInteractionEnabled &&
+            ConnectionToolState.GetSelection(observed.EditorState) is not null &&
             kind is InteractionKind.Selection or InteractionKind.Hover or InteractionKind.NodeBodyActivation)
             return await ExecuteElementConnectionAsync(observed, hit, documentPoint,
                 kind == InteractionKind.Selection, cancellationToken).ConfigureAwait(false);
@@ -355,7 +356,8 @@ public sealed partial class Canvas2DInteractionController : IAsyncDisposable
 
         if (kind == InteractionKind.Hover && _spatialResize is not null)
             return new(Canvas2DInteractionStatus.Unchanged, observed, cssCursor: ResizeCursor(_spatialResize.Target));
-        if (kind == InteractionKind.Hover && _pendingPointer is null && _persistentGesture is null &&
+        if (observed.IsEditingInteractionEnabled &&
+            kind == InteractionKind.Hover && _pendingPointer is null && _persistentGesture is null &&
             AcquireSpatialResize(observed, cssPoint, documentPoint, hit) is { } resizeTarget)
         {
             var feedback = new Canvas2DSpatialResizeFeedback(resizeTarget, Canvas2DSpatialResizePhase.Hover, resizeTarget.AuthoredExtent);
@@ -371,13 +373,14 @@ public sealed partial class Canvas2DInteractionController : IAsyncDisposable
         var resolvedHitItem = hit is null
             ? null
             : observed.CurrentScene.Items.FirstOrDefault(item => item.Id == hit.SceneObjectId);
-        var permitsVisualActions = resolvedHitItem is null ||
+        var permitsVisualActions = observed.IsEditingInteractionEnabled && (resolvedHitItem is null ||
             resolvedHitItem.Origin.VisualStateId is null ||
-            IsEditableVisualPresentation(resolvedHitItem);
+            IsEditableVisualPresentation(resolvedHitItem));
         var cssCursor = kind == InteractionKind.Hover
-            ? CssCursor(observed.CurrentScene, hit)
+            ? PointerCssCursor(observed, hit)
             : "default";
-        if (kind == InteractionKind.Hover && ConnectionSourceHoverEligibility(observed, resolvedHitItem) is { } eligibleSource)
+        if (observed.IsEditingInteractionEnabled && kind == InteractionKind.Hover &&
+            ConnectionSourceHoverEligibility(observed, resolvedHitItem) is { } eligibleSource)
         {
             cssCursor = eligibleSource ? "crosshair" : "not-allowed";
             if (!eligibleSource) targetId = null;
@@ -660,6 +663,18 @@ public sealed partial class Canvas2DInteractionController : IAsyncDisposable
                     exception);
             }
 #pragma warning restore CA1031
+
+            if (!observed.IsEditingInteractionEnabled)
+            {
+                // Retain ordinary click/multi-selection and stale-pointer cleanup without
+                // offering any persistent gesture candidate to subsequent move samples.
+                var selectedVisual = ResolveSelectableVisualStateId(observed.CurrentScene, hit);
+                _pendingPointer = new PendingPointerState(input.PointerId, input.ControlKey, documentPoint,
+                    selectedVisual, selectedVisual is null ? ResolveSelectableSemanticElementId(observed.CurrentScene, hit) : null,
+                    MoveTarget: null, observed.CurrentScene, observed.Generation, observed.EditorState);
+                return new(Canvas2DInteractionStatus.Unchanged, observed, hit,
+                    cssCursor: PointerCssCursor(observed, hit));
+            }
 
             if (ConnectionToolState.GetSelection(observed.EditorState) is not null)
                 return new(Canvas2DInteractionStatus.Unchanged, observed, hit, cssCursor: "crosshair");
@@ -1903,7 +1918,7 @@ public sealed partial class Canvas2DInteractionController : IAsyncDisposable
                 observed.EditorState,
                 releasedVisualStateId,
                 releasedSemanticElementId);
-        var cssCursor = CssCursor(observed.CurrentScene!, releaseHit);
+        var cssCursor = PointerCssCursor(observed, releaseHit);
         var completedClick = !pending.ControlKey && !pending.HasExceededClickDistance &&
             !HasReachedMoveActivationThreshold(documentPoint - pending.StartDocumentPoint) &&
             pending.SelectedVisualStateId == releasedVisualStateId;
@@ -4406,6 +4421,12 @@ public sealed partial class Canvas2DInteractionController : IAsyncDisposable
         _ => 5,
     };
 
+    private static string PointerCssCursor(EditingSessionState state, Canvas2DSceneHitTestResult? hit) =>
+        state.IsEditingInteractionEnabled
+            ? CssCursor(state.CurrentScene!, hit)
+            : ResolveSelectableVisualStateId(state.CurrentScene!, hit) is not null ||
+              ResolveSelectableSemanticElementId(state.CurrentScene!, hit) is not null ? "pointer" : "default";
+
     private static string CssCursor(
         Canvas2DScene scene,
         Canvas2DSceneHitTestResult? hitResult)
@@ -4494,7 +4515,7 @@ public sealed partial class Canvas2DInteractionController : IAsyncDisposable
                 state.CurrentScene,
                 cssPoint);
             var hit = _hitTestService.HitTest(state.CurrentScene, documentPoint);
-            return new PointerPresentation(hit, CssCursor(state.CurrentScene, hit));
+            return new PointerPresentation(hit, PointerCssCursor(state, hit));
         }
         catch (Exception exception) when (IsNonFatal(exception))
         {

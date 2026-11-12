@@ -34,6 +34,10 @@
     overflow: hidden;
 }
 
+.document-editor-layout.read-only {
+    grid-template-columns: minmax(0, 1fr);
+}
+
 .document-editor-workspace {
     container: inceptus-workspace / inline-size;
     display: flex;
@@ -106,6 +110,13 @@
 .model-context-submenu {
     position: relative;
 }
+
+.application-context-menu { max-height: calc(100% - 1rem); overflow-y: auto; }
+.application-action-group { border-top: 1px solid #cbd5e1; margin-top: 0.3rem; padding-top: 0.3rem; }
+.application-action-heading, .application-action-status { padding: 0.35rem 0.65rem; color: #475569; font-size: 0.85rem; }
+.application-action-heading { font-weight: 600; }
+.application-action-explanation { display: block; font-size: 0.8rem; color: #475569; }
+.object-context-menu button[aria-disabled="true"] { color: #64748b; cursor: default; }
 
 .object-context-menu .model-context-submenu-trigger {
     display: flex;
@@ -479,6 +490,7 @@
 }
 
 .editor-toolbar button {
+    height: 2.25rem;
     min-width: 2.35rem;
     padding: 0.45rem 0.9rem;
     border: 1px solid var(--editor-control-border);
@@ -509,7 +521,10 @@
     place-items: center;
     flex: 0 0 2.35rem;
     width: 2.35rem;
-    height: 2.35rem;
+    padding: 0;
+}
+
+.editor-toolbar .new-diagram-action {
     padding: 0;
 }
 

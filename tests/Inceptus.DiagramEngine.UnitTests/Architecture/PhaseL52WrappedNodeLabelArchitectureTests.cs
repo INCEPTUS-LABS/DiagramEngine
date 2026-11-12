@@ -52,7 +52,13 @@ public sealed class PhaseL52WrappedNodeLabelArchitectureTests
 
         Assert.Contains("internal async ValueTask<Canvas2DSceneBuildResult> BuildMeasuredAsync(",
             builder, StringComparison.Ordinal);
-        Assert.Contains("_configuration.SceneBuilder.BuildMeasuredAsync(", pipeline,
+        Assert.Contains("_sceneBuilder.BuildMeasuredAsync(", pipeline,
+            StringComparison.Ordinal);
+        Assert.Contains("_sceneBuilder = configuration.SceneBuilder.WithEditingEnabled(", pipeline,
+            StringComparison.Ordinal);
+        Assert.Contains("configuration.AccessMode == EditingSessionAccessMode.Editable", pipeline,
+            StringComparison.Ordinal);
+        Assert.Contains("internal Canvas2DSceneBuilder WithEditingEnabled(bool editingEnabled)", builder,
             StringComparison.Ordinal);
         Assert.Contains("_textMeasurementCache.TryGetValue(request", renderer,
             StringComparison.Ordinal);

@@ -11,6 +11,26 @@ public sealed class PhaseP12ReusableBpmnBlazorArchitectureTests
     private static readonly string RepositoryRoot = LocateRepositoryRoot();
 
     [Fact]
+    public void SourceHostDeclaresAnAvailableIconInsteadOfRequestingMissingFavicon()
+    {
+        var webRoot = Path.Combine(RepositoryRoot, "src", "Inceptus.DiagramEngine.Blazor", "wwwroot");
+        var page = XDocument.Load(Path.Combine(webRoot, "index.html"));
+        var icons = page.Descendants("link").Where(link =>
+            ((string?)link.Attribute("rel"))?.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+                .Contains("icon", StringComparer.OrdinalIgnoreCase) == true).ToArray();
+        Assert.NotEmpty(icons);
+        foreach (var icon in icons)
+        {
+            var href = (string?)icon.Attribute("href");
+            Assert.False(string.IsNullOrWhiteSpace(href));
+            if (href.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
+                Assert.Contains(",", href, StringComparison.Ordinal);
+            else
+                Assert.True(File.Exists(Path.Combine(webRoot, href)), $"Missing source-host icon: {href}");
+        }
+    }
+
+    [Fact]
     public void SourceHostStartsWithInvariantDataCultureAndNeutralEnglishUICulture()
     {
         var hostRoot = Path.Combine(RepositoryRoot, "src", "Inceptus.DiagramEngine.Blazor");

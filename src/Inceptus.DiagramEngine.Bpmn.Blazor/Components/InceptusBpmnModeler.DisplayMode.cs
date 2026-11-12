@@ -31,6 +31,8 @@ public partial class InceptusBpmnModeler
     protected override void OnParametersSet()
     {
         base.OnParametersSet();
+        ValidateAccessMode();
+        ConfigureApplicationActions();
         if (!Enum.IsDefined(DisplayMode)) throw new ArgumentOutOfRangeException(nameof(DisplayMode));
         if (_lastDisplayModeParameter != DisplayMode)
         {

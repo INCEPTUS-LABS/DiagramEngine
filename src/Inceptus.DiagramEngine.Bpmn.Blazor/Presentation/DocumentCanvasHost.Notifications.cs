@@ -136,6 +136,7 @@ internal sealed partial class DocumentCanvasHost
 
         lock (_sync)
         {
+            if (!_disposed) CollectSelectionNotificationUnderLock();
             if (!_disposed && _initializationAttempted && !_initialNotificationSent)
             {
                 _initialNotificationSent = true;

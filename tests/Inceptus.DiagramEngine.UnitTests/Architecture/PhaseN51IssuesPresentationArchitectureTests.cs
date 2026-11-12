@@ -62,7 +62,8 @@ public sealed class PhaseN51IssuesPresentationArchitectureTests
     public void FeedbackUsesAnOverlayAndOneFixedHeightEditorRow()
     {
         var hostStyles = ReadProductionFile("Inceptus.DiagramEngine.Blazor", "Demo", "BpmnDemoHost.razor.css");
-        Assert.Contains("grid-template-rows: auto minmax(0, 1fr);", hostStyles, StringComparison.Ordinal);
+        var layoutStyles = ReadProductionFile("Inceptus.DiagramEngine.Blazor", "Demo", "DemoApplicationLayout.razor.css");
+        Assert.Contains("grid-template-rows: auto minmax(0, 1fr);", layoutStyles, StringComparison.Ordinal);
         Assert.Contains("position: absolute", Between(hostStyles, ".operation-feedback-panel {", "}"), StringComparison.Ordinal);
         Assert.Contains("overflow: auto", Between(hostStyles, ".operation-feedback-body {", "}"), StringComparison.Ordinal);
         var editor = ReadProductionFile("Inceptus.DiagramEngine.Bpmn.Blazor", "Components", "DocumentCanvas.razor");

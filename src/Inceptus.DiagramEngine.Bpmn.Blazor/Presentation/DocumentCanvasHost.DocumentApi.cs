@@ -109,6 +109,9 @@ internal sealed partial class DocumentCanvasHost
             if (context?.CanReplaceDocument != true || _session is not { } session)
                 return new(BpmnModelerOperationStatus.Unavailable, null,
                     [Error("CANVAS_PUBLICATION_UNAVAILABLE", "Publication metadata cannot be edited while the editor is not ready.")]);
+            if (context.Presentation.AccessMode == EditingSessionAccessMode.ReadOnly)
+                return new(BpmnModelerOperationStatus.Rejected, null,
+                    [Error("BPMN_MODELER_READ_ONLY", "Publication metadata cannot be changed in read-only mode.")]);
             if (context.AttachmentVersion != attachmentVersion || context.Document.DocumentId != documentId ||
                 context.Document.Revision != revision)
                 return new(BpmnModelerOperationStatus.Rejected, null,

@@ -44,7 +44,8 @@ internal static class BpmnModelerComposition
     internal static ToolboxCatalog ToolboxCatalog { get; } =
         new(BpmnRegistration.ToolboxContributions);
 
-    internal static DocumentCanvasComposition Create(Document document)
+    internal static DocumentCanvasComposition Create(Document document,
+        EditingSessionAccessMode accessMode = EditingSessionAccessMode.Editable)
     {
         ArgumentNullException.ThrowIfNull(document);
 
@@ -82,7 +83,7 @@ internal static class BpmnModelerComposition
             connectorAnchorPolicyProvider: ConnectorAnchorPolicyProvider,
             modelProfileCatalog: new ModelProfileCatalog(
                 BpmnRegistration.ModelProfileDefinitions),
-            routingInputPreparer: OrganizationalRegistration.RoutingInputPreparer);
+            routingInputPreparer: OrganizationalRegistration.RoutingInputPreparer).WithAccessMode(accessMode);
 
         return new DocumentCanvasComposition(
             document,

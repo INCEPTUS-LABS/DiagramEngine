@@ -1,5 +1,6 @@
 using Inceptus.DiagramEngine.Bpmn.Blazor;
 using Inceptus.DiagramEngine.Canvas2D.EditingSession;
+using Inceptus.DiagramEngine.Canvas2D.Export;
 using Inceptus.DiagramEngine.Contracts.Canvas2D;
 using Inceptus.DiagramEngine.Contracts.EditorState;
 using Inceptus.DiagramEngine.Contracts.Presentation;
@@ -12,6 +13,13 @@ public partial class BpmnDemoHost
 {
     private ToolbarPresentation _toolbarPresentation = ToolbarPresentation.Unavailable;
     private ToolbarInputs? _readyToolbarInputs;
+
+    // Method-group callbacks retain event identity when the shared layout rerenders
+    // its child content during a derived-pipeline rebuild.
+    private void ToggleImportMenu() => ToggleDocumentMenu("import");
+    private void ToggleExportMenu() => ToggleDocumentMenu("export");
+    private Task ExportSvgAsync() => ExportGraphicalAsync(GraphicalExportFormat.Svg);
+    private Task ExportPngAsync() => ExportGraphicalAsync(GraphicalExportFormat.Png);
 
     // This snapshot controls appearance only. Operation handlers retain the live
     // Can* predicates and the editor/operation services remain authoritative.

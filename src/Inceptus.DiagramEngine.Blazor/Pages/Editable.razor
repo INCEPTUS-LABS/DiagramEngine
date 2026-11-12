@@ -1,0 +1,36 @@
+@page "/"
+@namespace Inceptus.DiagramEngine.Blazor.Pages
+@using Microsoft.AspNetCore.Components
+@using Inceptus.DiagramEngine.Blazor.Demo
+@inject NavigationManager Navigation
+
+@if (!_redirecting && !IsLegacyReadOnly)
+{
+    <BpmnDemoHost />
+}
+
+@code {
+    [SupplyParameterFromQuery(Name = "example")] public string? Example { get; set; }
+    [SupplyParameterFromQuery(Name = "sample")] public string? Sample { get; set; }
+
+    private bool _redirecting;
+    private bool IsLegacyReadOnly => string.Equals(Example, "read-only", StringComparison.Ordinal);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (IsLegacyReadOnly && !_redirecting)
+        {
+            // Navigation updates query suppliers synchronously. Keep this retired page empty
+            // until the router disposes it rather than briefly mounting the editable host.
+            _redirecting = true;
+            var source = Navigation.Uri;
+            var query = string.Equals(Sample, "order", StringComparison.Ordinal) ? "?sample=order" : string.Empty;
+            // Let the current query notification finish before changing its subscribers.
+            await Task.Yield();
+            if (Navigation.Uri == source)
+                Navigation.NavigateTo("read-only/" + query, replace: true);
+            else
+                _redirecting = false;
+        }
+    }
+}

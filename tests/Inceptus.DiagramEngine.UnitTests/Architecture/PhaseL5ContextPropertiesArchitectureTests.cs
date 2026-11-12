@@ -1,4 +1,6 @@
 using System.Reflection;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using Inceptus.DiagramEngine.Bpmn.Blazor.Presentation;
 using Inceptus.DiagramEngine.Canvas2D.EditingSession;
 using Inceptus.DiagramEngine.Contracts.Commands;
@@ -10,6 +12,13 @@ namespace Inceptus.DiagramEngine.UnitTests.Architecture;
 
 public sealed class PhaseL5ContextPropertiesArchitectureTests
 {
+    private const string LaunchSettingsPath = "src/Inceptus.DiagramEngine.Blazor/Properties/launchSettings.json";
+    private const string LaunchSettingsFixture = """
+        {"profiles":{"Inceptus.DiagramEngine.Blazor":{"commandName":"Project","launchBrowser":true,
+        "environmentVariables":{"ASPNETCORE_ENVIRONMENT":"Development"},
+        "applicationUrl":"https://localhost:50730;http://localhost:50731"}}}
+        """;
+
     [Fact]
     public void PropertiesLongFormLayoutIsWideResponsiveAndKeepsShortFieldsCompact()
     {
@@ -217,6 +226,13 @@ public sealed class PhaseL5ContextPropertiesArchitectureTests
             "Inceptus.DiagramEngine.Canvas2D",
             "EditingSession",
             "EditingSession.SceneTargets.cs");
+        var sessionCommandsSource = ReadProductionFile(
+            "Inceptus.DiagramEngine.Canvas2D",
+            "EditingSession",
+            "EditingSession.Commands.cs");
+        var submission = Between(sessionCommandsSource,
+            "private ValueTask<HistoryOperationResult> ExecuteCommandUnderGateAsync(",
+            "private static HistoryOperationResult ReadOnlyHistoryResult(");
         var properties = ReadProductionFile(
             "Inceptus.DiagramEngine.Bpmn.Blazor",
             "Presentation",
@@ -288,7 +304,15 @@ public sealed class PhaseL5ContextPropertiesArchitectureTests
         Assert.Contains("VisualPlacementMode.Pinned", apply, StringComparison.Ordinal);
         Assert.Equal(1, CountOccurrences(apply, "session.ExecuteForSceneTargetAsync("));
         Assert.Equal(0, CountOccurrences(apply, "session.ExecuteAsync("));
-        Assert.Equal(1, CountOccurrences(sceneTargetGate, "History.ExecuteAsync("));
+        Assert.Equal(1, CountOccurrences(sceneTargetGate, "ExecuteCommandUnderGateAsync("));
+        Assert.DoesNotContain("History.ExecuteAsync(", sceneTargetGate, StringComparison.Ordinal);
+        Assert.DoesNotContain("_commandProcessor", sceneTargetGate, StringComparison.Ordinal);
+        Assert.Contains("_accessMode == EditingSessionAccessMode.ReadOnly", submission, StringComparison.Ordinal);
+        Assert.Contains("? ValueTask.FromResult(ReadOnlyHistoryResult(", submission, StringComparison.Ordinal);
+        Assert.Contains(": History.ExecuteAsync(_commandProcessor, command, cancellationToken)",
+            submission, StringComparison.Ordinal);
+        Assert.Equal(1, CountOccurrences(ReadProductionDirectory(
+            "Inceptus.DiagramEngine.Canvas2D", "EditingSession"), "History.ExecuteAsync("));
         Assert.Contains("TryEnterCommandAsync", sceneTargetGate, StringComparison.Ordinal);
         Assert.DoesNotContain("History.ExecuteAsync(", host, StringComparison.Ordinal);
         Assert.Contains("session.WaitForIdleAsync", apply, StringComparison.Ordinal);
@@ -626,19 +650,125 @@ public sealed class PhaseL5ContextPropertiesArchitectureTests
         Assert.DoesNotContain("CreateBpmn", phaseSources, StringComparison.Ordinal);
         Assert.DoesNotContain("JsonSerializer", phaseSources, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("Serialize", phaseSources, StringComparison.OrdinalIgnoreCase);
+        var changedPaths = ChangedPaths().Where(static path =>
+            !path.StartsWith("docs/", StringComparison.OrdinalIgnoreCase)).ToArray();
+        // Permit the approved development-port correction only when every other JSON value
+        // matches HEAD. This is not a blanket exception for launch settings or JSON files.
+        var approvedLaunchPorts = changedPaths.Contains(LaunchSettingsPath, StringComparer.OrdinalIgnoreCase) &&
+            IsLaunchPortOnlyChange(RunGit($"show HEAD:{LaunchSettingsPath}"),
+                File.ReadAllText(Path.Combine(RepositoryRoot, LaunchSettingsPath)));
         // SDK updates are governed by the exact baseline assertion in SolutionArchitectureTests.
-        Assert.DoesNotContain(
-            ChangedPaths().Where(static path =>
-                !path.StartsWith("docs/", StringComparison.OrdinalIgnoreCase)),
-            static path =>
-                path.Contains("Serialization", StringComparison.OrdinalIgnoreCase) &&
-                    !ApprovedN102Changes.IsApprovedSerializationPath(path) ||
-                path.EndsWith(".json", StringComparison.OrdinalIgnoreCase) &&
-                    !path.Equals("global.json", StringComparison.OrdinalIgnoreCase) &&
-                    !path.Equals(
-                        "src/Inceptus.DiagramEngine.Blazor/Demo/bpmn-demo.inceptus.json",
-                        StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(changedPaths, path => IsForbiddenDataChange(path, approvedLaunchPorts));
     }
+
+    [Fact]
+    public void DataChangeGuardAllowsOnlyValidatedLaunchPorts()
+    {
+        var updated = LaunchSettingsFixture.Replace("50730", "4730", StringComparison.Ordinal)
+            .Replace("50731", "4731", StringComparison.Ordinal);
+
+        Assert.True(IsLaunchPortOnlyChange(LaunchSettingsFixture, updated));
+        Assert.False(IsForbiddenDataChange(LaunchSettingsPath, approvedLaunchPorts: true));
+        Assert.True(IsForbiddenDataChange(LaunchSettingsPath, approvedLaunchPorts: false));
+    }
+
+    [Theory]
+    [InlineData("src/Inceptus.DiagramEngine.Blazor/appsettings.json")]
+    [InlineData("src/Other/Properties/launchSettings.json")]
+    [InlineData("src/Inceptus.DiagramEngine.Blazor/Properties/extra.json")]
+    [InlineData("src/Inceptus.DiagramEngine.Runtime/Serialization/Other.cs")]
+    public void ApprovedLaunchPortsDoNotExemptOtherDataChanges(string path) =>
+        Assert.True(IsForbiddenDataChange(path, approvedLaunchPorts: true));
+
+    [Theory]
+    [InlineData("http://localhost:4730;http://localhost:4731")]
+    [InlineData("https://example.com:4730;http://localhost:4731")]
+    [InlineData("https://localhost:4730/path;http://localhost:4731")]
+    [InlineData("https://localhost:4730/?setting=1;http://localhost:4731")]
+    [InlineData("https://localhost:4730/#fragment;http://localhost:4731")]
+    [InlineData("https://user@localhost:4730;http://localhost:4731")]
+    [InlineData("https://localhost:4730")]
+    [InlineData("https://localhost:4730;http://localhost:4731;http://localhost:4732")]
+    [InlineData("https://localhost:4730;http://localhost:4730")]
+    [InlineData("https://localhost:0;http://localhost:4731")]
+    [InlineData("https://localhost:65536;http://localhost:4731")]
+    [InlineData("not-a-url;http://localhost:4731")]
+    public void LaunchPortApprovalRejectsInvalidOrChangedEndpoints(string urls)
+    {
+        var updated = LaunchSettingsFixture.Replace(
+            "https://localhost:50730;http://localhost:50731", urls, StringComparison.Ordinal);
+
+        Assert.False(IsLaunchPortOnlyChange(LaunchSettingsFixture, updated));
+    }
+
+    [Theory]
+    [InlineData("\"launchBrowser\":true", "\"launchBrowser\":false")]
+    [InlineData("\"Development\"", "\"Production\"")]
+    [InlineData("\"Project\"", "\"Executable\"")]
+    [InlineData("\"launchBrowser\":true", "\"launchBrowser\":true,\"extra\":true")]
+    [InlineData("\"Inceptus.DiagramEngine.Blazor\"", "\"OtherProfile\"")]
+    public void LaunchPortApprovalPreservesAllOtherConfiguration(string original, string replacement) =>
+        Assert.False(IsLaunchPortOnlyChange(LaunchSettingsFixture,
+            LaunchSettingsFixture.Replace(original, replacement, StringComparison.Ordinal)));
+
+    [Theory]
+    [InlineData("{")]
+    [InlineData("null")]
+    [InlineData("[]")]
+    [InlineData("{\"profiles\":{}}")]
+    public void LaunchPortApprovalFailsClosedForMalformedOrMissingProfiles(string candidate) =>
+        Assert.False(IsLaunchPortOnlyChange(LaunchSettingsFixture, candidate));
+
+    private static bool IsForbiddenDataChange(string path, bool approvedLaunchPorts) =>
+        path.Contains("Serialization", StringComparison.OrdinalIgnoreCase) &&
+            !ApprovedN102Changes.IsApprovedSerializationPath(path) ||
+        path.EndsWith(".json", StringComparison.OrdinalIgnoreCase) &&
+            !path.Equals("global.json", StringComparison.OrdinalIgnoreCase) &&
+            !path.Equals("src/Inceptus.DiagramEngine.Blazor/Demo/bpmn-demo.inceptus.json", StringComparison.OrdinalIgnoreCase) &&
+            !(approvedLaunchPorts && path.Equals(LaunchSettingsPath, StringComparison.OrdinalIgnoreCase));
+
+    private static bool IsLaunchPortOnlyChange(string original, string candidate)
+    {
+        try
+        {
+            var originalJson = JsonNode.Parse(original);
+            var candidateJson = JsonNode.Parse(candidate);
+            var originalProfile = LaunchProfile(originalJson);
+            var candidateProfile = LaunchProfile(candidateJson);
+            if (originalProfile?["applicationUrl"] is not JsonValue originalValue ||
+                candidateProfile?["applicationUrl"] is not JsonValue candidateValue ||
+                !originalValue.TryGetValue<string>(out var originalUrls) ||
+                !candidateValue.TryGetValue<string>(out var candidateUrls)) return false;
+
+            var originalEndpoints = originalUrls.Split(';');
+            var candidateEndpoints = candidateUrls.Split(';');
+            if (originalEndpoints.Length != candidateEndpoints.Length) return false;
+            var ports = new HashSet<int>();
+            for (var index = 0; index < originalEndpoints.Length; index++)
+            {
+                if (!Uri.TryCreate(originalEndpoints[index], UriKind.Absolute, out var originalEndpoint) ||
+                    !Uri.TryCreate(candidateEndpoints[index], UriKind.Absolute, out var candidateEndpoint) ||
+                    originalEndpoint.Scheme is not ("http" or "https") ||
+                    !originalEndpoint.IsLoopback || !candidateEndpoint.IsLoopback ||
+                    candidateEndpoint.Port <= 0 || !ports.Add(candidateEndpoint.Port) ||
+                    !string.Equals(new UriBuilder(candidateEndpoint) { Port = originalEndpoint.Port }.Uri.AbsoluteUri,
+                        originalEndpoint.AbsoluteUri, StringComparison.Ordinal))
+                    return false;
+            }
+
+            candidateProfile["applicationUrl"] = originalValue.DeepClone();
+            return JsonNode.DeepEquals(originalJson, candidateJson);
+        }
+        catch (Exception exception) when (exception is JsonException or InvalidOperationException or ArgumentException)
+        {
+            return false;
+        }
+    }
+
+    private static JsonObject? LaunchProfile(JsonNode? json) =>
+        json is JsonObject root && root["profiles"] is JsonObject profiles
+            ? profiles["Inceptus.DiagramEngine.Blazor"] as JsonObject
+            : null;
 
     private static int CountOccurrences(string source, string value)
     {

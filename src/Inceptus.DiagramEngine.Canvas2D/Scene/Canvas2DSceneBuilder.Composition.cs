@@ -343,7 +343,7 @@ public sealed partial class Canvas2DSceneBuilder
         }
     }
 
-    private static void ComposeEditorOverlays(
+    private void ComposeEditorOverlays(
         EditorStateSnapshot editorState,
         ProjectedGraph graph,
         VisualModelSnapshot visualModel,
@@ -422,6 +422,8 @@ public sealed partial class Canvas2DSceneBuilder
                 "#2563eb",
                 hasLineJumps,
                 persistentItems));
+
+            if (!_editingEnabled) continue;
 
             if (visualStatesById.TryGetValue(visualStateId, out var visualState))
             {
@@ -600,6 +602,8 @@ public sealed partial class Canvas2DSceneBuilder
                     editorState.HoveredObjectId.Value));
             }
         }
+
+        if (!_editingEnabled) return;
 
         ComposeSpatialResizeFeedback(editorState, items);
         if (editorState.ActiveGesture is not null && editorState.ActiveGesture.Kind != Canvas2DSpatialResizeFeedback.FeedbackKind)

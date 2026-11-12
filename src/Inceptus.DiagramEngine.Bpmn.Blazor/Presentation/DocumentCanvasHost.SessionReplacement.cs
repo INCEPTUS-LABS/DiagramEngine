@@ -62,6 +62,10 @@ internal sealed partial class DocumentCanvasHost
                 }
             }
 
+            if (sourceConfiguration.AccessMode == EditingSessionAccessMode.ReadOnly && nativeOptions?.ReprepareIncompatibleRouting == true)
+                return DocumentSessionReplacementResult.Rejected(
+                    [Error("BPMN_MODELER_READ_ONLY_ROUTING_RECOVERY", "Read-only replacement cannot recover saved routing.")]);
+
             var oldState = oldSession.CaptureState();
             if (oldState.Status != EditingSessionStatus.Ready ||
                 oldState.EditorState.ActiveGesture is not null)
@@ -245,7 +249,7 @@ internal sealed partial class DocumentCanvasHost
                 _viewportPanGesture = null;
                 _successfulPresentationGeneration = candidateState.Generation;
                 _surfaceRenderPending = false;
-                _contextMenu = null;
+                CloseContextMenuUnderLock();
                 _propertiesTargetVisualStateId = null;
                 _propertiesTargetSemanticElementId = null;
                 _propertiesTargetPresentationId = null;

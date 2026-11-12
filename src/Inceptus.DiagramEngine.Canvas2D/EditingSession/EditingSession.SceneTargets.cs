@@ -71,8 +71,8 @@ public sealed partial class EditingSession
                 }
             }
 
-            var result = await History.ExecuteAsync(
-                _commandProcessor, command, cancellationToken).ConfigureAwait(false);
+            var result = await ExecuteCommandUnderGateAsync(
+                command, cancellationToken).ConfigureAwait(false);
             RecordExpectedEvent(result);
             return result;
         }

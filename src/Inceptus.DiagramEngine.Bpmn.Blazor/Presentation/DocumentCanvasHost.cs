@@ -239,6 +239,13 @@ internal sealed partial class DocumentCanvasHost : IAsyncDisposable, IBpmnDocume
             }
 
             var state = session.CaptureState();
+            if (state.AccessMode == EditingSessionAccessMode.ReadOnly)
+            {
+                _ = ModelerNotifications?.Enqueue(new BpmnModelerOperationFailedEventArgs(
+                    BpmnModelerOperation.Selection, BpmnModelerOperationStatus.Rejected,
+                    [Error("BPMN_PRESENTATION_STAMP_REQUIRED", "Read-only selection requires the current presentation context stamp.")]));
+                return null;
+            }
             if (!IsPresentationContextAvailable(state) ||
                 state.DocumentId != documentId ||
                 state.DocumentRevision != revision ||
@@ -263,6 +270,7 @@ internal sealed partial class DocumentCanvasHost : IAsyncDisposable, IBpmnDocume
                 linked.Token).ConfigureAwait(false);
             lock (_sync)
             {
+                RecordPrimaryPresentationPartUnderLock(result);
                 _ = ReplaceInteractionDiagnosticsUnderLock(result.Diagnostics);
             }
             return result;
@@ -294,7 +302,7 @@ internal sealed partial class DocumentCanvasHost : IAsyncDisposable, IBpmnDocume
         {
             if (!_disposed && _contextMenu is not null)
             {
-                _contextMenu = null;
+                CloseContextMenuUnderLock();
                 changed = true;
             }
         }
@@ -387,7 +395,7 @@ internal sealed partial class DocumentCanvasHost : IAsyncDisposable, IBpmnDocume
                 context = _contextMenu;
                 catalog = _scopeNavigationCatalog;
                 notify = _contextMenu is not null;
-                _contextMenu = null;
+                CloseContextMenuUnderLock();
             }
 
             if (session is null || context?.ScopeNavigationAction is not { } action)
@@ -469,7 +477,7 @@ internal sealed partial class DocumentCanvasHost : IAsyncDisposable, IBpmnDocume
                 context = _contextMenu;
                 deletionCatalog = _deletionCatalog;
                 notify = _contextMenu is not null;
-                _contextMenu = null;
+                CloseContextMenuUnderLock();
             }
 
             if (session is null || context?.DeletionAction is not { } action)
@@ -606,7 +614,7 @@ internal sealed partial class DocumentCanvasHost : IAsyncDisposable, IBpmnDocume
                     : _session;
                 context = _contextMenu;
                 notify = _contextMenu is not null;
-                _contextMenu = null;
+                CloseContextMenuUnderLock();
             }
 
             if (session is null || context?.ConnectorRouteAction is not { } action)
@@ -724,7 +732,7 @@ internal sealed partial class DocumentCanvasHost : IAsyncDisposable, IBpmnDocume
                     : _session;
                 context = _contextMenu;
                 notify = _contextMenu is not null;
-                _contextMenu = null;
+                CloseContextMenuUnderLock();
             }
 
             if (session is null || context?.ConnectorAnchorAction is not { } action)
@@ -893,7 +901,7 @@ internal sealed partial class DocumentCanvasHost : IAsyncDisposable, IBpmnDocume
                     : _session;
                 context = _contextMenu;
                 notify = _contextMenu is not null;
-                _contextMenu = null;
+                CloseContextMenuUnderLock();
             }
 
             if (session is null || context?.ConnectorLabelAction is not { } action ||
@@ -997,7 +1005,7 @@ internal sealed partial class DocumentCanvasHost : IAsyncDisposable, IBpmnDocume
                     : _session;
                 context = _contextMenu;
                 notify = _contextMenu is not null;
-                _contextMenu = null;
+                CloseContextMenuUnderLock();
             }
 
             if (session is null || context?.NodeLabelAction is not { } action)
@@ -1119,7 +1127,7 @@ internal sealed partial class DocumentCanvasHost : IAsyncDisposable, IBpmnDocume
             {
                 lock (_sync)
                 {
-                    _contextMenu = null;
+                    CloseContextMenuUnderLock();
                 }
 
                 return null;
@@ -1146,11 +1154,11 @@ internal sealed partial class DocumentCanvasHost : IAsyncDisposable, IBpmnDocume
                         snapshot.SpatialRegion?.Id) ||
                     snapshot is null)
                 {
-                    _contextMenu = null;
+                    CloseContextMenuUnderLock();
                     return null;
                 }
 
-                _contextMenu = null;
+                CloseContextMenuUnderLock();
                 _propertiesTargetVisualStateId = targetVisualStateId;
                 _propertiesTargetSemanticElementId = null;
                 _propertiesTargetPresentationId = snapshot.SpatialRegion?.Id;
@@ -1281,7 +1289,7 @@ internal sealed partial class DocumentCanvasHost : IAsyncDisposable, IBpmnDocume
 
             _propertiesFormDirty = isDirty;
             _propertiesApplyInFlight = applyInFlight;
-            _contextMenu = null;
+            CloseContextMenuUnderLock();
             return true;
         }
     }
@@ -1607,7 +1615,7 @@ internal sealed partial class DocumentCanvasHost : IAsyncDisposable, IBpmnDocume
             {
                 lock (_sync)
                 {
-                    _contextMenu = null;
+                    CloseContextMenuUnderLock();
                 }
 
                 return null;
@@ -1622,11 +1630,11 @@ internal sealed partial class DocumentCanvasHost : IAsyncDisposable, IBpmnDocume
                     state.DocumentRevision != snapshot.Revision ||
                     state.EditorState.SemanticSceneSelection != targetSemanticElementId)
                 {
-                    _contextMenu = null;
+                    CloseContextMenuUnderLock();
                     return null;
                 }
 
-                _contextMenu = null;
+                CloseContextMenuUnderLock();
                 _propertiesTargetVisualStateId = null;
                 _propertiesTargetSemanticElementId = targetSemanticElementId;
                 _propertiesTargetPresentationId = snapshot.SpatialRegion?.Id;
@@ -1680,7 +1688,7 @@ internal sealed partial class DocumentCanvasHost : IAsyncDisposable, IBpmnDocume
                 identityProvider = _documentCreationIdentityProvider;
                 _ = _backgroundActionCatalog.TryGetDefinition(actionId, out definition);
                 notify = _contextMenu is not null;
-                _contextMenu = null;
+                CloseContextMenuUnderLock();
             }
 
             if (session is null || interactionController is null || definition is null ||
@@ -1815,7 +1823,7 @@ internal sealed partial class DocumentCanvasHost : IAsyncDisposable, IBpmnDocume
                     actionId,
                     out definition);
                 notify = _contextMenu is not null;
-                _contextMenu = null;
+                CloseContextMenuUnderLock();
             }
 
             if (session is null || definition is null ||
@@ -1950,7 +1958,7 @@ internal sealed partial class DocumentCanvasHost : IAsyncDisposable, IBpmnDocume
                     actionId,
                     out definition);
                 notify = _contextMenu is not null;
-                _contextMenu = null;
+                CloseContextMenuUnderLock();
             }
 
             if (session is null || definition is null ||
@@ -2108,7 +2116,7 @@ internal sealed partial class DocumentCanvasHost : IAsyncDisposable, IBpmnDocume
             {
                 lock (_sync)
                 {
-                    _contextMenu = null;
+                    CloseContextMenuUnderLock();
                 }
 
                 return null;
@@ -2119,11 +2127,11 @@ internal sealed partial class DocumentCanvasHost : IAsyncDisposable, IBpmnDocume
             {
                 if (_disposed || !ReferenceEquals(session, _session))
                 {
-                    _contextMenu = null;
+                    CloseContextMenuUnderLock();
                     return null;
                 }
 
-                _contextMenu = null;
+                CloseContextMenuUnderLock();
                 _modelViewPropertiesFormOpen = true;
                 _modelViewPropertiesFormDirty = false;
                 _modelViewPropertiesApplyInFlight = false;
@@ -2197,7 +2205,7 @@ internal sealed partial class DocumentCanvasHost : IAsyncDisposable, IBpmnDocume
 
             _modelViewPropertiesFormDirty = isDirty;
             _modelViewPropertiesApplyInFlight = applyInFlight;
-            _contextMenu = null;
+            CloseContextMenuUnderLock();
             return true;
         }
     }
@@ -2628,6 +2636,7 @@ internal sealed partial class DocumentCanvasHost : IAsyncDisposable, IBpmnDocume
             }
 
             _disposed = true;
+            RetireApplicationActionsUnderLock();
             ModelerNotifications?.Dispose();
             _documentNotifications?.Dispose();
             _viewportPanGesture = null;
@@ -2875,7 +2884,7 @@ internal sealed partial class DocumentCanvasHost : IAsyncDisposable, IBpmnDocume
                 _modelViewPropertiesFormOpen ||
                 _modelViewPropertiesFormDirty ||
                 !_interactionDiagnostics.IsEmpty;
-            _contextMenu = null;
+            CloseContextMenuUnderLock();
             _propertiesFormOpen = false;
             _propertiesTargetVisualStateId = null;
             _propertiesTargetSemanticElementId = null;
@@ -2971,7 +2980,9 @@ internal sealed partial class DocumentCanvasHost : IAsyncDisposable, IBpmnDocume
                 _surfaceSize = surfaceSize;
                 if (_contextMenu is { } contextMenu)
                 {
-                    _contextMenu = contextMenu.Kind ==
+                    _contextMenu = contextMenu.ApplicationContext is not null
+                        ? contextMenu.ClampApplicationActions(surfaceSize)
+                        : contextMenu.Kind ==
                         DocumentCanvasContextMenuKind.Background
                             ? DocumentCanvasContextMenuState.CreateBackgroundClamped(
                                 contextMenu.CssPosition,
@@ -3225,7 +3236,7 @@ internal sealed partial class DocumentCanvasHost : IAsyncDisposable, IBpmnDocume
         {
             lock (_sync)
             {
-                _contextMenu = null;
+                CloseContextMenuUnderLock();
                 _propertiesTargetVisualStateId = null;
                 _propertiesTargetSemanticElementId = null;
                 _propertiesTargetPresentationId = null;
@@ -3404,6 +3415,7 @@ internal sealed partial class DocumentCanvasHost : IAsyncDisposable, IBpmnDocume
         }
 
         var notify = false;
+        ApplicationActionRequest? applicationDiscovery = null;
         try
         {
             Canvas2DInteractionController? controller;
@@ -3422,7 +3434,7 @@ internal sealed partial class DocumentCanvasHost : IAsyncDisposable, IBpmnDocume
 
                 if (input.Kind == CanvasPointerEventKind.Down && _contextMenu is not null)
                 {
-                    _contextMenu = null;
+                    CloseContextMenuUnderLock();
                     notify = true;
                 }
                 if (input.Kind is CanvasPointerEventKind.Down or CanvasPointerEventKind.Cancel && _connectorToolboxRequest is not null)
@@ -3534,7 +3546,7 @@ internal sealed partial class DocumentCanvasHost : IAsyncDisposable, IBpmnDocume
                     lock (_sync)
                     {
                         notify |= _contextMenu is not null;
-                        _contextMenu = null;
+                        CloseContextMenuUnderLock();
                         if (placementActive)
                         {
                             _consumedPlacementPointerId = input.PointerId;
@@ -3711,19 +3723,9 @@ internal sealed partial class DocumentCanvasHost : IAsyncDisposable, IBpmnDocume
                                 _semanticSceneCommandActionCatalog,
                                 _documentCreationIdentityProvider)
                             : null;
-                        if (contextMenu is { Kind: DocumentCanvasContextMenuKind.Element } &&
-                            _propertiesSchemaCatalog is { } catalog)
-                        {
-                            contextMenu = contextMenu with
-                            {
-                                PropertiesAvailable = TryCaptureSelectedProperties(
-                                    session, contextMenu.TargetVisualStateId,
-                                    contextMenu.TargetSemanticElementId, requireReady: true, catalog, out _,
-                                    contextMenu.TargetSceneObjectId, contextMenu.TargetPresentation?.Id),
-                            };
-                        }
+                        contextMenu = CompleteNativeContextMenuUnderLock(contextMenu, session);
                         notify |= !Equals(_contextMenu, contextMenu);
-                        _contextMenu = contextMenu;
+                        SetContextMenuUnderLock(contextMenu);
                     }
                 }
                 else if (input.Kind == CanvasPointerEventKind.DoubleClick)
@@ -3792,6 +3794,15 @@ internal sealed partial class DocumentCanvasHost : IAsyncDisposable, IBpmnDocume
             lock (_sync)
             {
                 CompleteConnectorToolboxClick(input, result);
+                if (input.Kind is CanvasPointerEventKind.Up or CanvasPointerEventKind.ContextMenu or CanvasPointerEventKind.DoubleClick)
+                    RecordPrimaryPresentationPartUnderLock(result);
+                if (input.Kind == CanvasPointerEventKind.ContextMenu && result.Succeeded &&
+                    result.TargetId is { } actionPart && CapturePresentation().PrimaryPart?.SceneObjectId == actionPart)
+                {
+                    applicationDiscovery = PrepareApplicationActionsUnderLock(
+                        new PointD(input.ClientX - input.CanvasLeft, input.ClientY - input.CanvasTop));
+                    notify |= applicationDiscovery is not null;
+                }
                 notify |= result.IsCompletedSelectionClick;
                 notify |= ReplaceInteractionDiagnosticsUnderLock(
                     publishInteractionDiagnostics
@@ -3833,6 +3844,7 @@ internal sealed partial class DocumentCanvasHost : IAsyncDisposable, IBpmnDocume
             {
                 await NotifyStateChangedSafelyAsync().ConfigureAwait(false);
             }
+            if (applicationDiscovery is not null) _ = DiscoverApplicationActionsAsync(applicationDiscovery);
         }
     }
 
@@ -4047,7 +4059,7 @@ internal sealed partial class DocumentCanvasHost : IAsyncDisposable, IBpmnDocume
                 }
 
                 session = _session;
-                _contextMenu = null;
+                CloseContextMenuUnderLock();
             }
 
             if (session is null)
@@ -4123,7 +4135,7 @@ internal sealed partial class DocumentCanvasHost : IAsyncDisposable, IBpmnDocume
 
                 session = _session;
                 surfaceSize = _surfaceSize;
-                _contextMenu = null;
+                CloseContextMenuUnderLock();
             }
 
             if (session is null || surfaceSize is null)
@@ -4417,6 +4429,8 @@ internal sealed partial class DocumentCanvasHost : IAsyncDisposable, IBpmnDocume
                 return;
             }
 
+            ObservePresentationUnderLock(eventArgs.State);
+            ObserveApplicationActionsUnderLock(eventArgs.State);
             deferPlacementPreviewNotification = CanDeferPlacementPreviewNotification(eventArgs.State);
 
             if (_toolboxSelection.SelectedConnectionCreationId is { } selectedConnection &&
@@ -4543,7 +4557,7 @@ internal sealed partial class DocumentCanvasHost : IAsyncDisposable, IBpmnDocume
                            targetSemanticElementId,
                            contextMenu.TargetPresentation))))))
             {
-                _contextMenu = null;
+                CloseContextMenuUnderLock();
             }
 
             if (_propertiesFormOpen)
@@ -4979,8 +4993,40 @@ internal sealed partial class DocumentCanvasHost : IAsyncDisposable, IBpmnDocume
 #pragma warning restore CA1031
     }
 
+    private DocumentCanvasContextMenuState? CompleteNativeContextMenuUnderLock(DocumentCanvasContextMenuState? contextMenu, EditingSession session)
+    {
+        if (contextMenu is { Kind: DocumentCanvasContextMenuKind.Element } &&
+            _propertiesSchemaCatalog is { } catalog)
+        {
+            contextMenu = contextMenu with
+            {
+                PropertiesAvailable = TryCaptureSelectedProperties(
+                    session, contextMenu.TargetVisualStateId,
+                    contextMenu.TargetSemanticElementId, requireReady: true, catalog, out _,
+                    contextMenu.TargetSceneObjectId, contextMenu.TargetPresentation?.Id),
+            };
+        }
+        if (contextMenu is not null && session.CaptureState().AccessMode == EditingSessionAccessMode.ReadOnly)
+        {
+            contextMenu = contextMenu with
+            {
+                PropertiesAvailable = false,
+                DeletionAction = null,
+                ConnectorRouteAction = null,
+                ConnectorAnchorAction = null,
+                NodeLabelAction = null,
+                ConnectorLabelAction = null,
+                BackgroundActions = [],
+                SemanticCommandActions = [],
+            };
+            if (contextMenu.ScopeNavigationAction is null && contextMenu.SemanticViewActions.IsEmpty)
+                contextMenu = null;
+        }
+        return contextMenu;
+    }
+
     private static DocumentCanvasContextMenuState? CreateContextMenuIfCurrent(
-        Canvas2DInteractionResult result,
+        Canvas2DInteractionResult? result,
         VisualStateId? targetVisualStateId,
         PointD cssPoint,
         Canvas2DSurfaceSize? surfaceSize,
@@ -4990,7 +5036,8 @@ internal sealed partial class DocumentCanvasHost : IAsyncDisposable, IBpmnDocume
         CanvasBackgroundActionCatalog backgroundActionCatalog,
         SemanticSceneViewActionCatalog semanticSceneViewActionCatalog,
         SemanticSceneCommandActionCatalog semanticSceneCommandActionCatalog,
-        IDocumentCreationIdentityProvider identityProvider)
+        IDocumentCreationIdentityProvider identityProvider,
+        BpmnPresentationPart? keyboardPart = null, SemanticElementId? keyboardSemanticTarget = null)
     {
         ArgumentNullException.ThrowIfNull(deletionCatalog);
         ArgumentNullException.ThrowIfNull(scopeNavigationCatalog);
@@ -4999,23 +5046,20 @@ internal sealed partial class DocumentCanvasHost : IAsyncDisposable, IBpmnDocume
         ArgumentNullException.ThrowIfNull(semanticSceneCommandActionCatalog);
         ArgumentNullException.ThrowIfNull(identityProvider);
         var current = session.CaptureState();
-        if (!((result.Status is
-                    Canvas2DInteractionStatus.Updated or
-                    Canvas2DInteractionStatus.Unchanged) &&
-            surfaceSize is not null &&
-            current.Status == EditingSessionStatus.Ready &&
+        var pointerIsCurrent = result is not null &&
+            (result.Status is Canvas2DInteractionStatus.Updated or Canvas2DInteractionStatus.Unchanged) &&
             current.DocumentRevision == result.SessionState.DocumentRevision &&
             current.Generation == result.SessionState.Generation &&
             ReferenceEquals(current.EditorState, result.SessionState.EditorState) &&
             ReferenceEquals(current.CurrentScene, result.SessionState.CurrentScene) &&
-            current.PresentationContext == result.SessionState.PresentationContext &&
-            current.CurrentScene is not null))
-        {
-            return null;
-        }
-
+            current.PresentationContext == result.SessionState.PresentationContext;
+        if (surfaceSize is null || current.Status != EditingSessionStatus.Ready || current.CurrentScene is null ||
+            !(pointerIsCurrent || result is null && keyboardPart is not null)) return null;
+        var targetSceneObjectId = result?.TargetId ?? keyboardPart?.SceneObjectId;
+        var targetSpatialRegion = result?.HitResult?.SpatialRegion ??
+            (result is null ? current.CurrentScene.Items.SingleOrDefault(item => item.Id == targetSceneObjectId)?.SpatialRegion : null);
         var targetSemanticElementId = targetVisualStateId is null
-            ? result.TargetOrigin?.SemanticElementId
+            ? result?.TargetOrigin?.SemanticElementId ?? keyboardSemanticTarget
             : null;
         if (targetVisualStateId is null && targetSemanticElementId is null)
         {
@@ -5047,9 +5091,9 @@ internal sealed partial class DocumentCanvasHost : IAsyncDisposable, IBpmnDocume
             return DocumentCanvasContextMenuState.CreateBackgroundClamped(
                 cssPoint,
                 surfaceSize.Value,
-                result.SessionState.DocumentRevision,
-                result.SessionState.Generation,
-                result.SessionState.CurrentScene!,
+                current.DocumentRevision,
+                current.Generation,
+                current.CurrentScene!,
                 current.ActiveScopeId,
                 backgroundActions);
         }
@@ -5058,7 +5102,7 @@ internal sealed partial class DocumentCanvasHost : IAsyncDisposable, IBpmnDocume
         {
             if (current.PresentationContext is not ProcessScopePresentationContext)
                 return null;
-            if (result.TargetId is not { } semanticTargetSceneObjectId)
+            if (targetSceneObjectId is not { } semanticTargetSceneObjectId)
             {
                 return null;
             }
@@ -5124,24 +5168,24 @@ internal sealed partial class DocumentCanvasHost : IAsyncDisposable, IBpmnDocume
                 targetSemanticElementId,
                 semanticTargetSceneObjectId,
                 semanticDeletionAction,
-                result.SessionState.DocumentRevision,
-                result.SessionState.Generation,
-                result.SessionState.CurrentScene!,
+                current.DocumentRevision,
+                current.Generation,
+                current.CurrentScene!,
                 current.ActiveScopeId,
                 semanticViewActions,
                 semanticCommandActions,
-                result.HitResult?.SpatialRegion);
+                targetSpatialRegion);
         }
 
         if (targetVisualStateId is not { } visualTarget ||
-            result.TargetId is not { } visualTargetSceneObjectId ||
+            targetSceneObjectId is not { } visualTargetSceneObjectId ||
             !(current.EditorState.Selection.Contains(visualTarget) &&
               GetSpatialRegionId(current, visualTarget) ==
-                  result.HitResult?.SpatialRegion?.Id &&
+                  targetSpatialRegion?.Id &&
               ContainsPersistentVisualTarget(
                   current,
                   visualTarget,
-                  result.HitResult?.SpatialRegion)))
+                  targetSpatialRegion)))
         {
             return null;
         }
@@ -5205,19 +5249,19 @@ internal sealed partial class DocumentCanvasHost : IAsyncDisposable, IBpmnDocume
             surfaceSize.Value,
             visualTarget,
             visualTargetSceneObjectId,
-            result.ConnectorRouteContextAction,
-            result.SessionState.DocumentRevision,
-            result.SessionState.Generation,
-            result.SessionState.CurrentScene!,
-            result.ConnectorAnchorContextAction,
-            result.NodeLabelContextAction,
+            result?.ConnectorRouteContextAction,
+            current.DocumentRevision,
+            current.Generation,
+            current.CurrentScene!,
+            result?.ConnectorAnchorContextAction,
+            result?.NodeLabelContextAction,
             deletionAction,
             scopeNavigationAction,
             current.PresentationContext is ProcessScopePresentationContext menuProcess ? menuProcess.ScopeId : null,
             document is not null && document.VisualModel.TryGetVisualState(visualTarget, out var menuVisual) &&
                 menuVisual is not null && document.SemanticModel.TryGetElement(menuVisual.SemanticElementId, out _) &&
                 document.SemanticModel.TryGetScope(menuVisual.SemanticElementId, out var menuOrigin) ? menuOrigin?.Id : null,
-            result.HitResult?.SpatialRegion,
+            targetSpatialRegion,
             connectorLabelAction,
             current.PresentationContext);
     }
@@ -5485,7 +5529,7 @@ internal sealed partial class DocumentCanvasHost : IAsyncDisposable, IBpmnDocume
             source.ConnectorAnchorPolicyProvider,
             source.ModelProfileCatalog,
             source.InitialModelProfileViewState,
-            source.RoutingInputPreparer, _gridSettings ?? source.GridSettings);
+            source.RoutingInputPreparer, _gridSettings ?? source.GridSettings).WithAccessMode(source.AccessMode);
     }
 
     private static EditorStateSnapshot CopyEditorStateWithViewport(

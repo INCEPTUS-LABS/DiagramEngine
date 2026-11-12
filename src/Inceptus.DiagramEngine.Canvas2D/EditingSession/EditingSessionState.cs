@@ -86,7 +86,8 @@ public sealed class EditingSessionState
         bool isPanPresentationPending = false,
         PresentationViewContext? presentationContext = null,
         PresentationViewPlan? presentationPlan = null,
-        ImmutableArray<VisualStateId> selectionOrder = default)
+        ImmutableArray<VisualStateId> selectionOrder = default,
+        EditingSessionAccessMode accessMode = EditingSessionAccessMode.Editable)
     {
         ArgumentNullException.ThrowIfNull(documentId);
         ArgumentNullException.ThrowIfNull(activeScopeId);
@@ -165,6 +166,7 @@ public sealed class EditingSessionState
         IsCurrentScenePresented = !isClosed && status == EditingSessionStatus.Ready &&
             isCurrentScenePresented;
         IsPanPresentationPending = isPanPresentationPending;
+        AccessMode = accessMode;
     }
 
     public DocumentId DocumentId { get; }
@@ -232,6 +234,11 @@ public sealed class EditingSessionState
 
     public bool IsGraphicalInteractionEnabled =>
         !IsClosed && Status == EditingSessionStatus.Ready && CurrentScene is not null;
+
+    public EditingSessionAccessMode AccessMode { get; }
+
+    internal bool IsEditingInteractionEnabled =>
+        IsGraphicalInteractionEnabled && AccessMode == EditingSessionAccessMode.Editable;
 
     public bool IsDisplayingStaleScene =>
         !IsClosed &&

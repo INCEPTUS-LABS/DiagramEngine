@@ -33,6 +33,7 @@ public sealed partial class EditingSession : IAsyncDisposable
     private EditorStateStore? _editorState;
     private HistoryManager? _history;
     private readonly CommandProcessor _commandProcessor;
+    private readonly EditingSessionAccessMode _accessMode;
     private readonly EditingSessionDocumentChangedSubscriber _documentChangedSubscriber;
     private readonly SemaphoreSlim _rendererGate = new(1, 1);
     private readonly SemaphoreSlim _commandGate = new(1, 1);
@@ -95,6 +96,7 @@ public sealed partial class EditingSession : IAsyncDisposable
         _renderer = renderer;
         _gridSettings = configuration.GridSettings;
         _pipeline = pipeline;
+        _accessMode = configuration.AccessMode;
         ConnectorAnchorPolicyProvider = configuration.ConnectorAnchorPolicyProvider;
         _modelProfileCatalog = configuration.ModelProfileCatalog;
         _activeScopeId = document.SemanticModel.RootScopeId;
@@ -106,6 +108,16 @@ public sealed partial class EditingSession : IAsyncDisposable
         _lastModelProfileState = document.SemanticModel.ModelProfiles;
         var initialEditorState = NormalizeEditorStateViewport(
             configuration.InitialEditorState, configuration.InitialEditorState.Viewport);
+        if (_accessMode == EditingSessionAccessMode.ReadOnly)
+        {
+            // Inspection must start without editing state before the first pipeline run.
+            initialEditorState = new EditorStateSnapshot(
+                initialEditorState.Selection,
+                initialEditorState.HoveredObjectId,
+                focusTargetId: initialEditorState.FocusTargetId,
+                viewport: initialEditorState.Viewport,
+                semanticSceneSelection: initialEditorState.SemanticSceneSelection);
+        }
         _editorState = new EditorStateStore(initialEditorState);
         _history = new HistoryManager(document);
         _lastDocumentRevision = document.Revision;

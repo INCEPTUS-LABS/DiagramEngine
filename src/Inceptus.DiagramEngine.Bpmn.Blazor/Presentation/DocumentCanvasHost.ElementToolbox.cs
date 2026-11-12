@@ -158,7 +158,7 @@ internal sealed partial class DocumentCanvasHost
         if (state?.EditorState.Selection.Length != 1 || state.EditorState.Selection[0] != _dismissedElementToolbox)
             _dismissedElementToolbox = null;
         if (!_smartEditEnabled || _disposed || !_initialized || _propertiesFormOpen || _modelViewPropertiesFormOpen || _contextMenu is not null ||
-            state is null || state.IsClosed || state.EditorState.Selection.Length != 1 ||
+            state is null || state.AccessMode == EditingSessionAccessMode.ReadOnly || state.IsClosed || state.EditorState.Selection.Length != 1 ||
             state.EditorState.SemanticSceneSelection is not null || _toolboxSelection.SelectedItemId is not null ||
             ConnectionToolState.GetSelection(state.EditorState) is not null ||
             state.PresentationContext is not ProcessScopePresentationContext process ||

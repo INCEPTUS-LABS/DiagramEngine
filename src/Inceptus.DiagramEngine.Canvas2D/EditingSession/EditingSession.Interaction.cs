@@ -251,6 +251,11 @@ public sealed partial class EditingSession
                             expectedScene.DocumentId.Value)]);
                 }
 
+                if (RejectsEditingState(updatedEditorState))
+                {
+                    return ReadOnlyInteractionResult();
+                }
+
                 if (expectedEditorState.Equals(updatedEditorState))
                 {
                     return OperationResult(EditingSessionOperationStatus.Succeeded);
@@ -579,8 +584,7 @@ public sealed partial class EditingSession
             using var commandCancellation = CancellationTokenSource.CreateLinkedTokenSource(
                 cancellationToken,
                 _lifetime.Token);
-            result = await History.ExecuteAsync(
-                _commandProcessor,
+            result = await ExecuteCommandUnderGateAsync(
                 command,
                 commandCancellation.Token).ConfigureAwait(false);
             RecordExpectedEvent(result);

@@ -56,8 +56,15 @@ public sealed partial class EditingSession
                 if (_closing || _closed || state.Status != EditingSessionStatus.Ready || state.Generation != expected.Generation ||
                     !ReferenceEquals(state.CurrentScene, expected.CurrentScene) || !ReferenceEquals(state.EditorState, expected.EditorState) ||
                     state.PresentationContext != expected.PresentationContext || command.TargetDocumentId != document.DocumentId ||
-                    command.ExpectedRevision != document.Revision || ConnectionToolState.GetPendingSource(state.EditorState)?.Source != source ||
-                    !Current(source) || !Current(target))
+                    command.ExpectedRevision != document.Revision || !Current(source) || !Current(target))
+                    return InteractionCommandRejected(command, state, Canvas2DInteractionDiagnosticCodes.StaleScene,
+                        "The acquired elements no longer belong to the exact current document presentation.");
+
+                // Read-only attachment clears editing previews; access denial must not depend on retaining one.
+                if (_accessMode == EditingSessionAccessMode.ReadOnly)
+                    return ReadOnlyHistoryResult(command, state, cancellationToken);
+
+                if (ConnectionToolState.GetPendingSource(state.EditorState)?.Source != source)
                     return InteractionCommandRejected(command, state, Canvas2DInteractionDiagnosticCodes.StaleScene,
                         "The acquired elements no longer belong to the exact current document presentation.");
 
@@ -70,7 +77,7 @@ public sealed partial class EditingSession
                         IsCurrentSceneTarget(document, state.CurrentScene, state.PresentationContext, endpoint.SceneId, item.SpatialRegion);
                 }
             }
-            var result = await History.ExecuteAsync(_commandProcessor, command, cancellationToken).ConfigureAwait(false);
+            var result = await ExecuteCommandUnderGateAsync(command, cancellationToken).ConfigureAwait(false);
             RecordExpectedEvent(result);
             return result;
         }

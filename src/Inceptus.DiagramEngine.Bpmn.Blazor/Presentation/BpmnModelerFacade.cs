@@ -54,6 +54,7 @@ internal sealed partial class BpmnModelerFacade : IDisposable, IBpmnDocumentEdit
 
             host.ModelerNotifications = Notifications;
             _host = host;
+            host.SetApplicationActions(_applicationActionProvider, _applicationActionCallbackAvailable);
             host.ViewChanged += OnViewChanged;
         }
     }
@@ -101,7 +102,11 @@ internal sealed partial class BpmnModelerFacade : IDisposable, IBpmnDocumentEdit
         lock (_sync)
         {
             _disposed = true;
-            if (_host is not null) _host.ViewChanged -= OnViewChanged;
+            if (_host is not null)
+            {
+                _host.ViewChanged -= OnViewChanged;
+                _host.CancelPendingOperations();
+            }
             _host = null;
             Notifications.Dispose();
         }

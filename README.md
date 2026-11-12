@@ -1,19 +1,23 @@
 # Inceptus Diagram Engine
 
 A reusable BPMN modeler with immutable native documents and a standalone process
-presentation export. This README describes **1.0.0**, targeting **net10.0**, with
-SDK **10.0.403** for source builds. The migration guidance below does not announce
-completion of the GitHub repository rename, public NuGet publication or
-legacy-package deprecation.
+presentation export. This README describes **1.1.1**, targeting **net10.0**, with
+SDK **10.0.403** for source builds. Version 1.1.1 gives the source Demo editable
+and read-only pages with a shared application layout. The read-only inspection,
+semantic selection, guarded navigation and application-owned contextual action
+APIs introduced in 1.1.0 remain unchanged. Existing integrations remain editable
+by default. This documentation does not announce package availability.
 
-The six engine packages, assemblies and namespace prefixes migrate from
+## Migration from DocumentEngine 0.x
+
+Version 1.0.0 renamed the six engine packages, assemblies and namespace prefixes from
 `Inceptus.DocumentEngine.*` to `Inceptus.DiagramEngine.*`. Recompile consumers and
-migrate their complete dependency graph together: this is an intentional source
+migrate their complete dependency graph together: that rename is an intentional source
 and binary compatibility break. Update PackageReferences, C#/Razor imports and
 qualified type references for Contracts, Runtime, Bpmn, Organizational, Canvas2D
 and Bpmn.Blazor. `Inceptus.Bpmn.Integration`
-retains its Package ID, assembly name and namespace and advances to **1.0.0**;
-its public signatures now expose DiagramEngine types. Do not mix the two families.
+retained its Package ID, assembly name and namespace at **1.0.0**;
+its public signatures expose DiagramEngine types. Do not mix the two families.
 `AddInceptusBpmnModeler()` remains in `Microsoft.Extensions.DependencyInjection`.
 
 Native `Inceptus.Document` formatVersion **2**, `Inceptus.PublishedProcess`
@@ -21,7 +25,7 @@ formatVersion **1**, BPMN functionality, browser preference keys and execution
 behavior are unchanged. Existing documents require no rebranding conversion.
 Microsoft production dependencies remain **10.0.14**.
 
-RCL assets now use `_content/Inceptus.DiagramEngine.Canvas2D/` and
+Since 1.0.0, RCL assets use `_content/Inceptus.DiagramEngine.Canvas2D/` and
 `_content/Inceptus.DiagramEngine.Bpmn.Blazor/`. Update host-owned module/font URLs
 and rebuild published Blazor assets. Keep the existing JavaScript filenames.
 
@@ -31,7 +35,7 @@ and rebuild published Blazor assets. Keep the existing JavaScript filenames.
 
 | Package | Intended entry point |
 | --- | --- |
-| `Inceptus.DiagramEngine.Bpmn.Blazor` | Reusable BPMN editor and immutable document exchange. |
+| `Inceptus.DiagramEngine.Bpmn.Blazor` | Reusable BPMN editor, read-only inspection and immutable document exchange. |
 | `Inceptus.Bpmn.Integration` | Native serialization, version compatibility, explicit document validation, BPMN 2.0.2 conversion and publishing package generation. |
 | `Inceptus.DiagramEngine.Contracts` | Advanced, notation-neutral immutable models and extension contracts; the snapshot graph is also part of ordinary facade input/output. |
 | `Inceptus.DiagramEngine.Runtime` | Advanced headless document, command, processing and History infrastructure. |
@@ -49,11 +53,11 @@ transitively; hosts using only editing still need only the Bpmn.Blazor reference
 ## Embed the modeler
 
 The supported hosting model is a **standalone Blazor WebAssembly application** on
-.NET 10. Use the aligned 1.0.0 family when it is available from your package source:
+.NET 10. Use the aligned 1.1.1 family when it is available from your package source:
 
 ```xml
-<PackageReference Include="Inceptus.DiagramEngine.Bpmn.Blazor" Version="1.0.0" />
-<PackageReference Include="Inceptus.Bpmn.Integration" Version="1.0.0" />
+<PackageReference Include="Inceptus.DiagramEngine.Bpmn.Blazor" Version="1.1.1" />
+<PackageReference Include="Inceptus.Bpmn.Integration" Version="1.1.1" />
 ```
 
 Register the modeler in the application's `Program.cs`. The extension namespace is `Microsoft.Extensions.DependencyInjection`:
@@ -115,6 +119,10 @@ Open `Inceptus.DiagramEngine.sln` and select `Inceptus.DiagramEngine.Blazor`, or
 `dotnet run --project src/Inceptus.DiagramEngine.Blazor -c Release` from the source
 checkout. The project uses references to the current engine source; package
 consumers use the public component and PackageReferences described above.
+The same application provides the editable Demo at `/` and read-only inspection
+at `/read-only/`, using a shared full-height layout and application styling.
+Both routes support direct navigation and refresh when the host serves the
+Blazor application entry point for client-side routes.
 
 `Program.cs` selects `BpmnPoolDemoStartupDocumentProvider`: Company A has Sales
 and Warehouse Lanes, alongside independent Supplier and Supplier B Pools.
@@ -130,6 +138,30 @@ captions, move activities, use Undo/Redo, and pan or zoom the diagram. Selection
 and viewport changes remain transient; accepted edits use Commands and History.
 The application source is available as an example; the Demo itself is not a NuGet
 package. Its host operations are described below.
+
+### Read-only inspection example
+
+Open `/read-only/` in the running Demo to use
+[`ReadOnlyBpmnDemoHost`](src/Inceptus.DiagramEngine.Blazor/Demo/ReadOnlyBpmnDemoHost.razor).
+The default `/` remains editable. Existing `?example=read-only` links redirect to
+the read-only route. Its application toolbar exposes only **Settings**; the
+diagram retains selection, inspection, navigation, pan/zoom and maximise/restore.
+Settings are editor preferences, separate from the native document.
+
+The default sample shows **Pools and Lanes**. Open `/read-only/?sample=order` for
+the **Order Process** sample with nested Process/SubProcess navigation. Select a
+body, label, connector or header and use **Inspect details** in its context menu.
+Shift+F10 or the ContextMenu key opens
+the menu from the focused canvas selection. Arrow keys, Home/End and Enter/Space
+operate the menu; disabled items explain their state; Escape dismisses it and
+restores canvas focus. The details panel is application-owned state.
+
+The read-only page attaches an immutable native snapshot and uses the existing
+presentation and guarded navigation APIs. Inspection does not edit the document
+or enter native History. The built-in Order Process sample is prepared explicitly
+with the existing host preparation services before attachment; this preparation
+is separate from the read-only session and is not an import recovery path.
+Changing pages disposes the previous modeler and its pending application actions.
 
 ## Editing tools
 
@@ -282,6 +314,129 @@ The component owns its live Document, editing session, History and browser resou
 - `OperationFailed`: `EventCallback<BpmnModelerOperationFailedEventArgs>`; exposes `Operation`, `Status` and `ImmutableArray<Diagnostic> Diagnostics`. These are bounded operation diagnostics, separate from model-validation Issues. Expected cancellation does not emit a failure callback. Context-edit rejections use the editor's interaction diagnostics, not an additional facade callback kind.
 
 Callback **invocation** is ordered. Arbitrary asynchronous consumer callbacks may complete in a different order and may await subsequent modeler operations. Callback exceptions do not roll back committed changes. Track DocumentId together with revision: replacing a document can legitimately lower the revision number. Disposal and retired sessions suppress stale notifications.
+
+## Read-only presentation and application actions
+
+Version 1.1.0 adds `InceptusBpmnModeler.AccessMode` of type
+`EditingSessionAccessMode` (`Inceptus.DiagramEngine.Canvas2D.EditingSession`). Its
+default is `Editable`. Set `ReadOnly` when constructing the component; changing it
+during that component's lifetime throws. Remount to choose a different access mode.
+Normal/Maximized `DisplayMode` is a separate, changeable presentation setting.
+
+Read-only sessions preserve the complete attached native document, including revision,
+semantic/visual identities, geometry, routing, anchors, metadata and native History.
+Native editing commands, Undo/Redo and publication metadata updates are rejected.
+Selection, hover, pan/zoom, transient visibility and supported Process/SubProcess
+navigation remain available; read-only navigation adds no native History. Editable
+navigation retains its established chronological History behavior.
+
+Hosts may explicitly replace a read-only attachment using `SetDocumentAsync`; the new
+session remains read-only. Failed/cancelled replacement preserves the previous usable
+attachment. `ReprepareIncompatibleRouting` is rejected for a read-only attachment:
+prepare incompatible content separately before supplying the accepted snapshot.
+This is a component-owned enforcement boundary, not a security sandbox for arbitrary
+application code that separately owns a mutable runtime.
+
+The same component implements `IBpmnDiagramPresentation` alongside the unchanged
+`IBpmnDocumentEditor` contract:
+
+```csharp
+BpmnPresentationSnapshot CapturePresentation();
+ValueTask<BpmnPresentationOperationResult> SelectVisualAsync(
+    BpmnPresentationContextStamp context, VisualStateId visualStateId,
+    CancellationToken cancellationToken = default);
+ValueTask<BpmnPresentationOperationResult> NavigateToScopeAsync(
+    BpmnPresentationContextStamp context, DocumentScopeId scopeId,
+    CancellationToken cancellationToken = default);
+```
+
+Capture a fresh presentation immediately before a guarded operation and use its `Stamp`.
+Do not manufacture or cache stamps across operations. A stamp includes component,
+attachment, document/revision, scope/context and selection currency. Replacing with
+identical IDs/revision still invalidates it, as do selection/context changes and disposal.
+Inspect the returned `Succeeded`, `Status`, `Presentation` and `Diagnostics`; a rejected
+stale request is not retried against a different target. The legacy unstamped visual
+selection overload remains compatible for editors and is rejected in read-only mode.
+
+`CapturePresentation()` returns immutable ordered `Selection`, optional `PrimaryPart`,
+`ActiveScopeId`, `ScopePath`, `AvailableScopes` and diagnostics. `IsAvailable == false`
+means there is no actionable stamp or selection; this differs from an available empty
+selection. `SelectionChanged` is an `EventCallback<BpmnSelectionChangedEventArgs>`
+carrying that snapshot. It reports logical selection/primary-part changes and clearing
+on lifecycle changes; hover and viewport changes do not masquerade as selection events.
+Readback can be temporarily unavailable while a frame is being presented; use the
+selection notification as the logical selection authority, rather than interpreting
+every unavailable readback as a selection clearing.
+The existing `ViewChanged` semantics are unchanged.
+
+Each `BpmnSemanticSelectionTarget` preserves `SemanticId`, element-versus-relationship
+`Kind`, optional `VisualStateId` and its presentation `Parts`. A flow is a relationship;
+a Pool/Lane header and its Participant remain different semantic elements. Labels are
+parts of their owners, not new semantic IDs. Semantic-only targets need no fabricated
+visual identity. Background, decorations and ambiguous owners do not yield invented targets.
+
+Configure application actions per component:
+
+```razor
+@using Inceptus.DiagramEngine.Bpmn.Blazor
+@using Inceptus.DiagramEngine.Bpmn.Blazor.Components
+@using Inceptus.DiagramEngine.Canvas2D.EditingSession
+@using Inceptus.DiagramEngine.Contracts.Documents
+
+<InceptusBpmnModeler InitialDocument="Snapshot" AccessMode="EditingSessionAccessMode.ReadOnly"
+    ApplicationActionProvider="DiscoverActions" ApplicationActionInvoked="Inspect" />
+<p>@details</p>
+
+@code {
+    [Parameter, EditorRequired] public DocumentSnapshot Snapshot { get; set; } = null!;
+    private string details = "Select an element to inspect.";
+
+    private ValueTask<IEnumerable<BpmnApplicationAction>> DiscoverActions(
+        BpmnApplicationActionContext context, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return ValueTask.FromResult<IEnumerable<BpmnApplicationAction>>(
+            [new("app:inspect", "Inspect details"),
+             new("app:external", "Open external record", false, "No application connection.")]);
+    }
+
+    private Task Inspect(BpmnApplicationActionInvocationEventArgs args)
+    {
+        if (!args.CancellationToken.IsCancellationRequested && args.ActionId == "app:inspect")
+            details = $"{args.Context.Target.Kind}: {args.Context.Target.SemanticId.Value}";
+        return Task.CompletedTask;
+    }
+}
+```
+
+The provider may await application services with the supplied cancellation token.
+Its descriptor sequence is copied; IDs must be nonblank, unique, trimmed and contain
+no control characters, and labels must be nonblank. Invalid results reject the entire
+application group. Descriptors have get-only `Id`, `Label`, `IsEnabled` and optional
+`DisabledExplanation`. No native editing Commands or live engine handles are exposed.
+
+Discovery and invocation share an immutable `BpmnApplicationActionContext`: `Presentation`,
+`Stamp`, `Target`, optional exact `Part`, and a request/menu `RequestVersion`. Availability
+and target currency are checked again before the callback. Replacement, navigation,
+selection changes, target concealment/removal, menu dismissal/supersession and disposal
+retire pending work. Equivalent hover recomposition does not invalidate an otherwise
+current menu. Provider/callback exceptions produce bounded `OperationFailed` feedback
+with `BpmnModelerOperation.ApplicationAction`.
+
+Callbacks execute outside native locks, in invocation order, and may await later modeler
+operations. Their completions may arrive out of order. Once an external callback starts,
+cancellation is cooperative and DiagramEngine cannot reverse application-side effects.
+Validate your application's own run/version before applying asynchronous business results.
+With no provider the editable context menu is unchanged; opting in adds a separate
+application group alongside native editor actions. Read-only menus contain application
+actions and permitted inspection/navigation actions.
+
+The semantic context is input-neutral and can associate an application-owned contextual
+toolbar with the selected element. `Part.Bounds` uses final Scene document coordinates;
+existing immutable `CaptureEditorContext()` viewport/surface data supports mapping them
+to canvas coordinates. The API does not provide an external floating-overlay lifecycle,
+canvas DOM origin or viewport-only change notification. No simulation toolbar, simulation
+execution or transient annotation API is included.
 
 ## Editor document API and host operations
 

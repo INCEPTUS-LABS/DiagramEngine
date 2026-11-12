@@ -82,7 +82,14 @@ public sealed partial class DocumentCanvasHostTests
             .Select(frame => frame.AttributeEventHandlerId).Skip(1).ToArray();
         internal int[] FileInputIds() => Frames().Where(frame => frame.FrameType == RenderTreeFrameType.Component &&
             frame.ComponentType == typeof(InputFile)).Select(frame => frame.ComponentId).ToArray();
-        private IEnumerable<RenderTreeFrame> Frames() => GetCurrentRenderTreeFrames(_id).Array.Take(GetCurrentRenderTreeFrames(_id).Count);
+        private IEnumerable<RenderTreeFrame> Frames()
+        {
+            var frames = GetCurrentRenderTreeFrames(_id);
+            var layout = Assert.Single(frames.Array.Take(frames.Count), frame =>
+                frame.FrameType == RenderTreeFrameType.Component && frame.ComponentType == typeof(DemoApplicationLayout));
+            var layoutFrames = GetCurrentRenderTreeFrames(layout.ComponentId);
+            return layoutFrames.Array.Take(layoutFrames.Count);
+        }
 
         protected override Task UpdateDisplayAsync(in RenderBatch batch)
         {

@@ -33,7 +33,7 @@ internal sealed partial class EditingSessionPipeline : ISessionPipelineProcessin
                 modelProfileElementViewState, cancellationToken).ConfigureAwait(false);
         if (previousScene.BoundedPresentation?.ConnectorLabelMove is not null)
         {
-            var labelScene = _configuration.SceneBuilder.TryReuseForConnectorLabelMove(previousScene, document,
+            var labelScene = _sceneBuilder.TryReuseForConnectorLabelMove(previousScene, document,
                 artifacts.ScopeId, modelProfileViewState, modelProfileElementViewState,
                 artifacts.ProjectedGraph, artifacts.LayoutResult, artifacts.RoutingResult, editorState, cancellationToken);
             return labelScene is null
@@ -52,7 +52,7 @@ internal sealed partial class EditingSessionPipeline : ISessionPipelineProcessin
         }
         if (previousScene.BoundedPresentation?.RouteBend is not null)
         {
-            var routeScene = _configuration.SceneBuilder.TryReuseForRouteBend(previousScene, document,
+            var routeScene = _sceneBuilder.TryReuseForRouteBend(previousScene, document,
                 artifacts.ScopeId, modelProfileViewState, modelProfileElementViewState,
                 artifacts.ProjectedGraph, artifacts.LayoutResult, artifacts.RoutingResult, editorState, cancellationToken);
             return routeScene is null
@@ -66,7 +66,7 @@ internal sealed partial class EditingSessionPipeline : ISessionPipelineProcessin
         // gesture families must never reuse that base when the label drag retires.
         if (previousScene.BoundedPresentation?.NodeLabelMove is not null)
         {
-            var labelScene = _configuration.SceneBuilder.TryReuseForNodeLabelMove(previousScene, document,
+            var labelScene = _sceneBuilder.TryReuseForNodeLabelMove(previousScene, document,
                 artifacts.ScopeId, modelProfileViewState, modelProfileElementViewState,
                 artifacts.ProjectedGraph, artifacts.LayoutResult, artifacts.RoutingResult, editorState, cancellationToken);
             return labelScene is null
@@ -76,12 +76,12 @@ internal sealed partial class EditingSessionPipeline : ISessionPipelineProcessin
                     artifacts.LayoutResult.Diagnostics.Concat(artifacts.RoutingResult.Diagnostics).Concat(labelScene.Diagnostics),
                     reusedNodeLabelMoveContent: true);
         }
-        var scene = _configuration.SceneBuilder.TryReuseForMovePreview(
+        var scene = _sceneBuilder.TryReuseForMovePreview(
             previousScene, document, artifacts.ScopeId, modelProfileViewState,
             modelProfileElementViewState, artifacts.ProjectedGraph, artifacts.LayoutResult,
             artifacts.RoutingResult, editorState, cancellationToken);
         var reusedMove = scene is not null;
-        scene ??= _configuration.SceneBuilder.TryReuseForSelection(
+        scene ??= _sceneBuilder.TryReuseForSelection(
             previousScene, document, artifacts.ScopeId, modelProfileViewState,
             modelProfileElementViewState, artifacts.ProjectedGraph, artifacts.LayoutResult,
             artifacts.RoutingResult, editorState, cancellationToken);
@@ -89,7 +89,7 @@ internal sealed partial class EditingSessionPipeline : ISessionPipelineProcessin
         var reusedPlacement = false;
         if (scene is null)
         {
-            (scene, reusedSelection) = await _configuration.SceneBuilder.TryReuseForPlacementPreviewAsync(
+            (scene, reusedSelection) = await _sceneBuilder.TryReuseForPlacementPreviewAsync(
                 previousScene, document, artifacts.ScopeId, modelProfileViewState,
                 modelProfileElementViewState, artifacts.ProjectedGraph, artifacts.LayoutResult,
                 artifacts.RoutingResult, editorState, _renderer,
@@ -100,7 +100,7 @@ internal sealed partial class EditingSessionPipeline : ISessionPipelineProcessin
         var reusedSpatialResize = false;
         if (scene is null)
         {
-            scene = _configuration.SceneBuilder.TryReuseForSpatialResize(previousScene, document, artifacts.ScopeId,
+            scene = _sceneBuilder.TryReuseForSpatialResize(previousScene, document, artifacts.ScopeId,
                 modelProfileViewState, modelProfileElementViewState, artifacts.ProjectedGraph, artifacts.LayoutResult,
                 artifacts.RoutingResult, editorState, cancellationToken);
             reusedSpatialResize = scene is not null;
@@ -122,7 +122,7 @@ internal sealed partial class EditingSessionPipeline : ISessionPipelineProcessin
         EditorStateSnapshot editorState,
         ModelProfileViewStateSnapshot modelProfileViewState,
         ModelProfileElementViewStateSnapshot modelProfileElementViewState) =>
-        artifacts.PresentationContext is ProcessScopePresentationContext && _configuration.SceneBuilder.CanDeferPanPresentation(
+        artifacts.PresentationContext is ProcessScopePresentationContext && _sceneBuilder.CanDeferPanPresentation(
             previousScene, document, artifacts.ScopeId, modelProfileViewState,
             modelProfileElementViewState, artifacts.ProjectedGraph, artifacts.LayoutResult,
             artifacts.RoutingResult, editorState);
@@ -140,7 +140,7 @@ internal sealed partial class EditingSessionPipeline : ISessionPipelineProcessin
         if (artifacts.PresentationContext is DocumentPresentationContext)
             return RebuildSceneAsync(document, artifacts, editorState, modelProfileViewState,
                 modelProfileElementViewState, cancellationToken);
-        var scene = _configuration.SceneBuilder.TryReuseForPan(
+        var scene = _sceneBuilder.TryReuseForPan(
             previousScene, document, artifacts.ScopeId, modelProfileViewState,
             modelProfileElementViewState, artifacts.ProjectedGraph, artifacts.LayoutResult,
             artifacts.RoutingResult, editorState);
@@ -154,12 +154,15 @@ internal sealed partial class EditingSessionPipeline : ISessionPipelineProcessin
     }
 
     private readonly EditingSessionConfiguration _configuration;
+    private readonly Canvas2DSceneBuilder _sceneBuilder;
     private readonly Canvas2DRenderer? _renderer;
 
     internal EditingSessionPipeline(EditingSessionConfiguration configuration)
     {
         ArgumentNullException.ThrowIfNull(configuration);
         _configuration = configuration;
+        _sceneBuilder = configuration.SceneBuilder.WithEditingEnabled(
+            configuration.AccessMode == EditingSessionAccessMode.Editable);
     }
 
     internal EditingSessionPipeline(
@@ -1125,7 +1128,7 @@ internal sealed partial class EditingSessionPipeline : ISessionPipelineProcessin
         ModelProfileElementViewStateSnapshot modelProfileElementViewState, CancellationToken cancellationToken,
         PresentationViewPlan? presentationPlan = null) =>
         _renderer is null
-            ? ValueTask.FromResult(_configuration.SceneBuilder.Build(
+            ? ValueTask.FromResult(_sceneBuilder.Build(
                 document,
                 activeScopeId,
                 modelProfileViewState,
@@ -1135,7 +1138,7 @@ internal sealed partial class EditingSessionPipeline : ISessionPipelineProcessin
                 routing,
                 visualModel,
                 editorState, presentationPlan))
-            : _configuration.SceneBuilder.BuildMeasuredAsync(
+            : _sceneBuilder.BuildMeasuredAsync(
                 document,
                 activeScopeId,
                 modelProfileViewState,
@@ -1157,13 +1160,13 @@ internal sealed partial class EditingSessionPipeline : ISessionPipelineProcessin
         EditorStateSnapshot editorState,
         CancellationToken cancellationToken) =>
         _renderer is null
-            ? ValueTask.FromResult(_configuration.SceneBuilder.Build(
+            ? ValueTask.FromResult(_sceneBuilder.Build(
                 graph,
                 layout,
                 routing,
                 visualModel,
                 editorState))
-            : _configuration.SceneBuilder.BuildMeasuredAsync(
+            : _sceneBuilder.BuildMeasuredAsync(
                 graph,
                 layout,
                 routing,

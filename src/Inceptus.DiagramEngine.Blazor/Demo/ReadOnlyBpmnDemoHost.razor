@@ -1,0 +1,60 @@
+@namespace Inceptus.DiagramEngine.Blazor.Demo
+@using Inceptus.DiagramEngine.Bpmn.Blazor
+@using Inceptus.DiagramEngine.Bpmn.Blazor.Components
+@using Inceptus.DiagramEngine.Canvas2D.EditingSession
+@using Microsoft.AspNetCore.Components.Web
+@using Microsoft.Extensions.Localization
+@inject IStringLocalizer<ModelerStrings> Text
+@implements IDisposable
+
+<DemoApplicationLayout DisplayMode="_displayMode">
+    <div class="editor-toolbar host-toolbar" hidden="@(_displayMode == BpmnModelerDisplayMode.Maximized)"
+         role="toolbar" aria-label="Document operations">
+        <button @ref="_settingsButton" type="button" disabled="@(!CanOperate)"
+                @onclick="OpenSettingsAsync">@Text["Settings_Title"]</button>
+    </div>
+    <canvas id="@MeasurementId" class="sample-measurement" aria-hidden="true" tabindex="-1" width="1" height="1"></canvas>
+    @if (_source is not null)
+    {
+        <InceptusBpmnModeler @ref="Modeler" InitialDocument="_source" AccessMode="EditingSessionAccessMode.ReadOnly"
+            @bind-DisplayMode="_displayMode"
+            Ready="OnReady" DocumentChanged="OnDocumentChanged" SelectionChanged="OnSelectionChanged"
+            ViewChanged="RefreshPresentation" OperationFailed="OnFailure"
+            ApplicationActionProvider="DiscoverActionsAsync" ApplicationActionInvoked="InspectAsync" />
+    }
+    else
+    {
+        <p class="inspection-feedback" role="status">@Feedback</p>
+    }
+    @if (_detailsOpen)
+    {
+        <aside class="selection-details" aria-label="Semantic selection" aria-live="polite"
+               @onpointerdown:stopPropagation @onwheel:stopPropagation @oncontextmenu:preventDefault>
+            <header>
+                <h2>Inspection details</h2>
+                <button type="button" aria-label="Close inspection details" @onclick="CloseDetails">×</button>
+            </header>
+            @if (Presentation is not { IsAvailable: true })
+            {
+                <p>Presentation unavailable.</p>
+            }
+            else if (Presentation.Selection.IsEmpty)
+            {
+                <p>No selection.</p>
+            }
+            else
+            {
+                <ol>
+                    @foreach (var target in Presentation.Selection)
+                    {
+                        <li><strong>@target.Kind</strong> <code>@target.SemanticId.Value</code>
+                            <span> · @(target.VisualStateId?.Value ?? "Semantic-only presentation")</span></li>
+                    }
+                </ol>
+                <p>Selected part: @(Presentation.PrimaryPart?.Kind.ToString() ?? "No specific presentation part")</p>
+            }
+            <p class="application-details">@ApplicationDetails</p>
+            <p class="inspection-feedback" role="status">@Feedback</p>
+        </aside>
+    }
+</DemoApplicationLayout>

@@ -258,12 +258,27 @@ public sealed class PhaseLResizeInteractionArchitectureTests
             "Inceptus.DiagramEngine.Canvas2D",
             "EditingSession",
             "EditingSession.Interaction.cs");
+        var sessionCommandsSource = ReadProductionFile(
+            "Inceptus.DiagramEngine.Canvas2D",
+            "EditingSession",
+            "EditingSession.Commands.cs");
+        var submission = Between(sessionCommandsSource,
+            "private ValueTask<HistoryOperationResult> ExecuteCommandUnderGateAsync(",
+            "private static HistoryOperationResult ReadOnlyHistoryResult(");
 
         Assert.Equal(1, Count(releaseBody, "new ResizeVisualStateCommand("));
         Assert.Equal(1, Count(releaseBody, "_session.CompletePersistentGestureAsync("));
         Assert.DoesNotContain("new CommandProcessor(", source, StringComparison.Ordinal);
-        Assert.Contains("History.ExecuteAsync(", sessionSource, StringComparison.Ordinal);
-        Assert.Contains("_commandProcessor,", sessionSource, StringComparison.Ordinal);
+        Assert.Equal(1, Count(sessionSource, "ExecuteCommandUnderGateAsync("));
+        Assert.Contains("TryEnterCommandAsync", sessionSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("History.ExecuteAsync(", sessionSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("_commandProcessor", sessionSource, StringComparison.Ordinal);
+        Assert.Contains("_accessMode == EditingSessionAccessMode.ReadOnly", submission, StringComparison.Ordinal);
+        Assert.Contains("? ValueTask.FromResult(ReadOnlyHistoryResult(", submission, StringComparison.Ordinal);
+        Assert.Contains(": History.ExecuteAsync(_commandProcessor, command, cancellationToken)",
+            submission, StringComparison.Ordinal);
+        Assert.Equal(1, Count(ReadProductionDirectory(
+            "Inceptus.DiagramEngine.Canvas2D", "EditingSession"), "History.ExecuteAsync("));
     }
 
     [Fact]

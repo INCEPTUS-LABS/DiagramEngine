@@ -294,4 +294,6 @@
   <data name="Appearance_pool-header" xml:space="preserve"><value>Nagłówek samodzielnej puli</value></data>
   <data name="Appearance_lane-header" xml:space="preserve"><value>Nagłówek toru</value></data>
   <data name="Appearance_participant-header" xml:space="preserve"><value>Nagłówek uczestnika</value></data>
+  <data name="Context_ApplicationActions" xml:space="preserve"><value>Akcje aplikacji</value></data>
+  <data name="Context_LoadingActions" xml:space="preserve"><value>Ładowanie akcji...</value></data>
 </root>

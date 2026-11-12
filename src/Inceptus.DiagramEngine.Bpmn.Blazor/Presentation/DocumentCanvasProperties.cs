@@ -58,12 +58,32 @@ internal sealed record DocumentCanvasContextMenuState(
     // Presentation applicability belongs to this open instance. Execution still
     // validates current authoritative state through the existing host path.
     internal bool PropertiesAvailable { get; init; }
+    internal BpmnApplicationActionContext? ApplicationContext { get; init; }
+    internal ImmutableArray<BpmnApplicationAction> ApplicationActions { get; init; } = [];
+    internal bool IsApplicationDiscoveryPending { get; init; }
 
     private const double HorizontalInset = 8d;
     private const double VerticalInset = 8d;
     private const double ExpectedWidth = 240d;
     private const double SingleActionExpectedHeight = 44d;
     private const double AdditionalActionExpectedHeight = 36d;
+
+    internal DocumentCanvasContextMenuState ClampApplicationActions(Canvas2DSurfaceSize surfaceSize)
+    {
+        if (ApplicationContext is null) return this;
+        var nativeCount = (PropertiesAvailable ? 1 : 0) + (ScopeNavigationAction is null ? 0 : 1) +
+            (ConnectorRouteAction is null ? 0 : 1) + AnchorActionCount(ConnectorAnchorAction) +
+            (NodeLabelAction is null ? 0 : 1) + (ConnectorLabelAction is null ? 0 : 1) +
+            (DeletionAction is null ? 0 : 1) + SemanticViewActions.Length + SemanticCommandActions.Length;
+        var actionCount = nativeCount + Math.Max(1, ApplicationActions.Length) + 1;
+        var expectedHeight = SingleActionExpectedHeight + (actionCount - 1) * AdditionalActionExpectedHeight;
+        return this with
+        {
+            CssPosition = new PointD(
+                Math.Clamp(CssPosition.X, HorizontalInset, Math.Max(HorizontalInset, surfaceSize.CssWidth - ExpectedWidth - HorizontalInset)),
+                Math.Clamp(CssPosition.Y, VerticalInset, Math.Max(VerticalInset, surfaceSize.CssHeight - expectedHeight - VerticalInset))),
+        };
+    }
 
     internal static DocumentCanvasContextMenuState CreateClamped(
         PointD cssPosition,

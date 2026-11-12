@@ -294,4 +294,6 @@
   <data name="Appearance_pool-header" xml:space="preserve"><value>En-tête de pool autonome</value></data>
   <data name="Appearance_lane-header" xml:space="preserve"><value>En-tête de couloir</value></data>
   <data name="Appearance_participant-header" xml:space="preserve"><value>En-tête de participant</value></data>
+  <data name="Context_ApplicationActions" xml:space="preserve"><value>Actions de l'application</value></data>
+  <data name="Context_LoadingActions" xml:space="preserve"><value>Chargement des actions...</value></data>
 </root>

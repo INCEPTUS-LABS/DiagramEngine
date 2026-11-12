@@ -29,8 +29,7 @@ public sealed partial class EditingSession
                 return UnavailableHistoryResult(command, state);
             }
 
-            var result = await History.ExecuteAsync(
-                _commandProcessor,
+            var result = await ExecuteCommandUnderGateAsync(
                 command,
                 cancellationToken).ConfigureAwait(false);
             RecordExpectedEvent(result);
@@ -87,8 +86,7 @@ public sealed partial class EditingSession
                         expectedSelectedVisualStateId.Value)]);
             }
 
-            var result = await History.ExecuteAsync(
-                _commandProcessor,
+            var result = await ExecuteCommandUnderGateAsync(
                 command,
                 cancellationToken).ConfigureAwait(false);
             RecordExpectedEvent(result);
@@ -121,6 +119,11 @@ public sealed partial class EditingSession
             if (IsHistoryRestorationUnavailable(out var state))
             {
                 return UnavailableHistoryResult(command: null, state);
+            }
+
+            if (_accessMode == EditingSessionAccessMode.ReadOnly)
+            {
+                return ReadOnlyHistoryResult(command: null, state, cancellationToken);
             }
 
             var result = isUndo
@@ -186,8 +189,7 @@ public sealed partial class EditingSession
                         expectedSelectedSemanticElementId.Value)]);
             }
 
-            var result = await History.ExecuteAsync(
-                _commandProcessor,
+            var result = await ExecuteCommandUnderGateAsync(
                 command,
                 cancellationToken).ConfigureAwait(false);
             RecordExpectedEvent(result);
@@ -197,6 +199,37 @@ public sealed partial class EditingSession
         {
             _commandGate.Release();
         }
+    }
+
+    // Every persistent session submission reaches this boundary while holding _commandGate.
+    // The mode is fixed at attachment, so no command type or restoration policy can bypass it.
+    private ValueTask<HistoryOperationResult> ExecuteCommandUnderGateAsync(
+        ICommand command,
+        CancellationToken cancellationToken) =>
+        _accessMode == EditingSessionAccessMode.ReadOnly
+            ? ValueTask.FromResult(ReadOnlyHistoryResult(command, CaptureState(), cancellationToken))
+            : History.ExecuteAsync(_commandProcessor, command, cancellationToken);
+
+    private static HistoryOperationResult ReadOnlyHistoryResult(
+        ICommand? command,
+        EditingSessionState state,
+        CancellationToken cancellationToken)
+    {
+        var cancelled = cancellationToken.IsCancellationRequested;
+        return HistoryOperationResult.CreateNotCommitted(
+            state.DocumentId,
+            command?.TypeId,
+            cancelled
+                ? HistoryOperationStatus.Cancelled
+                : HistoryOperationStatus.CommandFailed,
+            state.DocumentRevision,
+            state.HistoryStatus,
+            cancelled
+                ? [CancelledDiagnostic(state.DocumentId.Value)]
+                : [Error(
+                    EditingSessionDiagnosticCodes.ReadOnly,
+                    "The read-only Editing Session cannot execute persistent Commands or restore History.",
+                    state.DocumentId.Value)]);
     }
 
     private async ValueTask<bool> TryEnterCommandAsync(CancellationToken cancellationToken)

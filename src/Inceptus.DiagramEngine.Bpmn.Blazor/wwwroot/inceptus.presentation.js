@@ -26,6 +26,54 @@ export function writeEditorSettings(key, value) {
     catch { return false; }
 }
 
+// DOM focus and menu geometry only. Semantic targeting, action availability and invocation
+// remain managed decisions; activating a button uses its existing Blazor click handler.
+function visibleMenuItems(menu) {
+    return [...menu.querySelectorAll('button[role="menuitem"]')]
+        .filter(item => !item.disabled && item.getClientRects().length > 0);
+}
+
+export function focusContextMenu(menuElementId, takeFocus) {
+    const menu = document.getElementById(menuElementId);
+    if (!(menu instanceof HTMLElement) || !menu.parentElement) return false;
+    const surface = menu.parentElement.getBoundingClientRect();
+    const bounds = menu.getBoundingClientRect();
+    menu.style.left = `${Math.max(8, Math.min(bounds.left - surface.left, surface.width - bounds.width - 8))}px`;
+    menu.style.top = `${Math.max(8, Math.min(bounds.top - surface.top, surface.height - bounds.height - 8))}px`;
+    if (takeFocus || document.activeElement === menu) {
+        (visibleMenuItems(menu)[0] ?? menu).focus({ preventScroll: true });
+    }
+    return true;
+}
+
+export function handleContextMenuKey(menuElementId, key) {
+    const menu = document.getElementById(menuElementId);
+    if (!(menu instanceof HTMLElement)) return false;
+    const items = visibleMenuItems(menu);
+    if (items.length === 0) return false;
+    const current = items.indexOf(document.activeElement);
+    let next;
+    if (key === "ArrowDown") next = (current + 1) % items.length;
+    else if (key === "ArrowUp") next = (current < 0 ? items.length - 1 : current + items.length - 1) % items.length;
+    else if (key === "Home") next = 0;
+    else if (key === "End") next = items.length - 1;
+    else if (key === "Enter" || key === " ") {
+        if (current >= 0 && items[current].getAttribute("aria-disabled") !== "true") items[current].click();
+        return true;
+    } else return false;
+    items[next].focus({ preventScroll: true });
+    return true;
+}
+
+export function restoreCanvasFocus(canvasElementId) {
+    const canvas = document.getElementById(canvasElementId);
+    const active = document.activeElement;
+    if (!(canvas instanceof HTMLCanvasElement) ||
+        active && active !== document.body && active.isConnected) return false;
+    canvas.focus({ preventScroll: true });
+    return true;
+}
+
 export function createCanvasPointerObserver(canvasElementId, dotNetReference) {
     const canvas = document.getElementById(canvasElementId);
     if (!(canvas instanceof HTMLCanvasElement)) {
@@ -168,6 +216,7 @@ class CanvasPointerObserver {
     #onAuxClick;
     #onWheel;
     #onWindowBlur;
+    #onKeyDown;
 
     constructor(canvas, dotNetReference) {
         this.#canvas = canvas;
@@ -183,6 +232,11 @@ class CanvasPointerObserver {
         this.#onAuxClick = event => this.#captureAuxClick(event);
         this.#onWheel = event => this.#captureWheel(event);
         this.#onWindowBlur = () => this.#captureFocusLoss();
+        this.#onKeyDown = event => {
+            if (this.#canvas.dataset.applicationActionsEnabled === "true" &&
+                (event.key === "ContextMenu" || event.key === "F10" && event.shiftKey) &&
+                !event.ctrlKey && !event.altKey && !event.metaKey) event.preventDefault();
+        };
     }
 
     start() {
@@ -204,6 +258,7 @@ class CanvasPointerObserver {
         this.#canvas.addEventListener("dblclick", this.#onDoubleClick);
         this.#canvas.addEventListener("auxclick", this.#onAuxClick);
         this.#canvas.addEventListener("wheel", this.#onWheel, { passive: false });
+        this.#canvas.addEventListener("keydown", this.#onKeyDown);
         window.addEventListener("blur", this.#onWindowBlur);
     }
 
@@ -259,6 +314,7 @@ class CanvasPointerObserver {
             this.#canvas.removeEventListener("dblclick", this.#onDoubleClick);
             this.#canvas.removeEventListener("auxclick", this.#onAuxClick);
             this.#canvas.removeEventListener("wheel", this.#onWheel);
+            this.#canvas.removeEventListener("keydown", this.#onKeyDown);
             window.removeEventListener("blur", this.#onWindowBlur);
         }
         this.#lastSurfaceInput = null;

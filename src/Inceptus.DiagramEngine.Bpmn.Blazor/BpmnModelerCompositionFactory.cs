@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using Inceptus.DiagramEngine.Canvas2D.EditingSession;
 using Inceptus.DiagramEngine.Bpmn.Blazor.Presentation;
 using Inceptus.DiagramEngine.Contracts.Documents;
 using Inceptus.DiagramEngine.Contracts.Toolbox;
@@ -16,16 +17,20 @@ internal sealed class BpmnModelerCompositionFactory : IDocumentCanvasComposition
 
     internal BpmnModelerCompositionFactory(
         IEnumerable<IBpmnModelerStartupDocumentProvider>? startupProviders = null,
-        DocumentSnapshot? initialDocument = null)
+        DocumentSnapshot? initialDocument = null,
+        EditingSessionAccessMode accessMode = EditingSessionAccessMode.Editable)
     {
         _startupProviders = CopyStartupProviders(startupProviders);
         _initialDocument = initialDocument;
+        if (!Enum.IsDefined(accessMode)) throw new ArgumentOutOfRangeException(nameof(accessMode));
+        AccessMode = accessMode;
     }
 
     internal BpmnModelerCompositionFactory(
         Func<IEnumerable<IBpmnModelerStartupDocumentProvider>> resolveStartupProviders,
-        DocumentSnapshot? initialDocument = null)
-        : this(initialDocument: initialDocument)
+        DocumentSnapshot? initialDocument = null,
+        EditingSessionAccessMode accessMode = EditingSessionAccessMode.Editable)
+        : this(initialDocument: initialDocument, accessMode: accessMode)
     {
         ArgumentNullException.ThrowIfNull(resolveStartupProviders);
         _resolveStartupProviders = resolveStartupProviders;
@@ -33,10 +38,17 @@ internal sealed class BpmnModelerCompositionFactory : IDocumentCanvasComposition
 
     internal static ToolboxCatalog ToolboxCatalog => BpmnModelerComposition.ToolboxCatalog;
 
+    internal EditingSessionAccessMode AccessMode { get; }
+
     internal BpmnModelerCompositionFactory WithInitialDocument(DocumentSnapshot? initialDocument) =>
         _resolveStartupProviders is null
-            ? new(_startupProviders, initialDocument)
-            : new(_resolveStartupProviders, initialDocument);
+            ? new(_startupProviders, initialDocument, AccessMode)
+            : new(_resolveStartupProviders, initialDocument, AccessMode);
+
+    internal BpmnModelerCompositionFactory WithAccessMode(EditingSessionAccessMode accessMode) =>
+        _resolveStartupProviders is null
+            ? new(_startupProviders, _initialDocument, accessMode)
+            : new(_resolveStartupProviders, _initialDocument, accessMode);
 
     public async ValueTask<DocumentCanvasComposition> CreateAsync(
         CancellationToken cancellationToken = default)
@@ -52,7 +64,7 @@ internal sealed class BpmnModelerCompositionFactory : IDocumentCanvasComposition
                     "The initial Document snapshot is not valid for the BPMN modeler.");
             }
 
-            return BpmnModelerComposition.Create(reconstruction.Document!);
+            return BpmnModelerComposition.Create(reconstruction.Document!, AccessMode);
         }
 
         var startupProviders = _resolveStartupProviders is null
@@ -72,7 +84,7 @@ internal sealed class BpmnModelerCompositionFactory : IDocumentCanvasComposition
         cancellationToken.ThrowIfCancellationRequested();
 
         return BpmnModelerComposition.Create(document ?? throw new InvalidOperationException(
-            "The BPMN modeler startup Document provider returned no Document."));
+            "The BPMN modeler startup Document provider returned no Document."), AccessMode);
     }
 
     private static ImmutableArray<IBpmnModelerStartupDocumentProvider> CopyStartupProviders(

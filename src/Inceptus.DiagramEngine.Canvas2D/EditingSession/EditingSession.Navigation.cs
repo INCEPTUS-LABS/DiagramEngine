@@ -31,7 +31,7 @@ public sealed partial class EditingSession
         {
             (runTask, immediateResult, historyMutation) = BeginScopeNavigationUnderCommandGate(
                 scopeId,
-                recordHistory: true,
+                recordHistory: _accessMode == EditingSessionAccessMode.Editable,
                 cancellationToken);
             if (immediateResult is not null)
             {

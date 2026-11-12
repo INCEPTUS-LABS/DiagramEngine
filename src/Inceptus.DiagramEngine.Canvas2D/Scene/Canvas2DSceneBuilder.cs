@@ -27,6 +27,7 @@ public sealed partial class Canvas2DSceneBuilder
     private readonly Canvas2DSceneContributorRegistry _contributors;
     private readonly Canvas2DNodeLabelLayoutConfiguration _nodeLabelLayout;
     private readonly Canvas2DConnectorLabelLayoutConfiguration _connectorLabelLayout;
+    private readonly bool _editingEnabled = true;
 
     public Canvas2DSceneBuilder(
         Canvas2DSceneConfiguration? configuration = null,
@@ -37,6 +38,25 @@ public sealed partial class Canvas2DSceneBuilder
         _nodeLabelLayout = Canvas2DNodeLabelLayoutConfiguration.Default;
         _connectorLabelLayout = Canvas2DConnectorLabelLayoutConfiguration.Default;
     }
+
+    private Canvas2DSceneBuilder(Canvas2DSceneBuilder source, bool editingEnabled)
+    {
+        _configuration = source._configuration;
+        _contributors = source._contributors;
+        _nodeLabelLayout = source._nodeLabelLayout;
+        _connectorLabelLayout = source._connectorLabelLayout;
+        _editingEnabled = editingEnabled;
+    }
+
+    // Builder identity already participates in retained Scene provenance. A session-owned
+    // immutable copy keeps editor and inspection caches isolated without changing contracts.
+    internal Canvas2DSceneBuilder WithEditingEnabled(bool editingEnabled) =>
+        _editingEnabled == editingEnabled ? this : new(this, editingEnabled);
+
+    private EditorStateSnapshot SceneEditorState(EditorStateSnapshot state) =>
+        _editingEnabled ? state : new EditorStateSnapshot(state.Selection, state.HoveredObjectId,
+            focusTargetId: state.FocusTargetId, viewport: state.Viewport,
+            semanticSceneSelection: state.SemanticSceneSelection);
 
     /// <summary>
     /// Resolves the visible logical Document rectangle for one Canvas CSS surface.
@@ -199,6 +219,8 @@ public sealed partial class Canvas2DSceneBuilder
         {
             return Canvas2DSceneBuildResult.Failure(missingInputs);
         }
+
+        editorState = SceneEditorState(editorState);
 
         cancellationToken.ThrowIfCancellationRequested();
 #pragma warning disable CA1031 // Measurement/construction faults become deterministic diagnostics.
@@ -440,6 +462,7 @@ public sealed partial class Canvas2DSceneBuilder
         ImmutableArray<Canvas2DPlacementLabelLayout>? placementLabelLayouts = null)
     {
         var diagnostics = initialDiagnostics?.ToList() ?? [];
+        editorState = SceneEditorState(editorState);
         if (presentation is { Plan: null, PresentationContext: ProcessScopePresentationContext process })
         {
             // Preserve the public Process build entry point. Document-level members come

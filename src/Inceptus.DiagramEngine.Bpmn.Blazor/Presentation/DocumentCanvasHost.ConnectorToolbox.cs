@@ -37,7 +37,7 @@ internal sealed partial class DocumentCanvasHost
         target = null;
         if (_connectorToolboxRequest is not { } request) return false;
         if (!_smartEditEnabled || _disposed || !_initialized || _propertiesFormOpen || _modelViewPropertiesFormOpen ||
-            _contextMenu is not null || state is null || state.IsClosed || state.EditorState.ActiveGesture is not null ||
+            _contextMenu is not null || state is null || state.AccessMode == EditingSessionAccessMode.ReadOnly || state.IsClosed || state.EditorState.ActiveGesture is not null ||
             state.EditorState.SemanticSceneSelection is not null || _toolboxSelection.SelectedItemId is not null ||
             ConnectionToolState.GetSelection(state.EditorState) is not null ||
             _documentSessionVersion != request.SessionVersion || state.DocumentId != request.DocumentId ||

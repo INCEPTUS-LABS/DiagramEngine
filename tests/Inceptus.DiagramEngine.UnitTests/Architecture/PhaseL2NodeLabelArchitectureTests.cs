@@ -119,7 +119,7 @@ public sealed class PhaseL2NodeLabelArchitectureTests
         Assert.DoesNotContain("EditorState", Between(
             compositionSource,
             "private static void ComposePipelineItems(",
-            "private static void ComposeEditorOverlays("), StringComparison.Ordinal);
+            "private void ComposeEditorOverlays("), StringComparison.Ordinal);
         Assert.DoesNotContain("VisualStateSnapshot(", compositionSource, StringComparison.Ordinal);
     }
 

@@ -294,4 +294,6 @@
   <data name="Appearance_pool-header" xml:space="preserve"><value>Cabecera de pool independiente</value></data>
   <data name="Appearance_lane-header" xml:space="preserve"><value>Cabecera de carril</value></data>
   <data name="Appearance_participant-header" xml:space="preserve"><value>Cabecera de participante</value></data>
+  <data name="Context_ApplicationActions" xml:space="preserve"><value>Acciones de la aplicación</value></data>
+  <data name="Context_LoadingActions" xml:space="preserve"><value>Cargando acciones...</value></data>
 </root>

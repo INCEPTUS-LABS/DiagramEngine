@@ -73,6 +73,43 @@ public sealed class EditingSessionConfiguration
             ModelProfileViewStateSnapshot.Empty;
     }
 
+    private EditingSessionConfiguration(
+        EditingSessionConfiguration source,
+        EditingSessionAccessMode accessMode)
+    {
+        if (!Enum.IsDefined(accessMode))
+        {
+            throw new ArgumentOutOfRangeException(nameof(accessMode), accessMode,
+                "The session access mode must be defined.");
+        }
+
+        ProjectionEngine = source.ProjectionEngine;
+        LayoutEngine = source.LayoutEngine;
+        LayoutAlgorithmId = source.LayoutAlgorithmId;
+        RoutingEngine = source.RoutingEngine;
+        RoutingAlgorithmId = source.RoutingAlgorithmId;
+        SceneBuilder = source.SceneBuilder;
+        ProjectionContext = source.ProjectionContext;
+        LayoutContext = source.LayoutContext;
+        RoutingContext = source.RoutingContext;
+        RoutingInputPreparer = source.RoutingInputPreparer;
+        GridSettings = source.GridSettings;
+        InitialEditorState = source.InitialEditorState;
+        CommandHandlers = source.CommandHandlers;
+        CommandValidators = source.CommandValidators;
+        HistoryPolicies = source.HistoryPolicies;
+        DocumentChangedSubscribers = source.DocumentChangedSubscribers;
+        ConnectorAnchorPolicyProvider = source.ConnectorAnchorPolicyProvider;
+        ModelProfileCatalog = source.ModelProfileCatalog;
+        InitialModelProfileViewState = source.InitialModelProfileViewState;
+        AccessMode = accessMode;
+    }
+
+    public EditingSessionAccessMode AccessMode { get; } = EditingSessionAccessMode.Editable;
+
+    public EditingSessionConfiguration WithAccessMode(EditingSessionAccessMode accessMode) =>
+        new(this, accessMode);
+
     public ProjectionEngine ProjectionEngine { get; }
 
     public LayoutEngine LayoutEngine { get; }

@@ -294,4 +294,6 @@
   <data name="Appearance_pool-header" xml:space="preserve"><value>Standalone Pool header</value></data>
   <data name="Appearance_lane-header" xml:space="preserve"><value>Lane header</value></data>
   <data name="Appearance_participant-header" xml:space="preserve"><value>Participant header</value></data>
+  <data name="Context_ApplicationActions" xml:space="preserve"><value>Application actions</value></data>
+  <data name="Context_LoadingActions" xml:space="preserve"><value>Loading actions...</value></data>
 </root>

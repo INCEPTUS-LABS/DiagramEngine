@@ -111,7 +111,7 @@ public sealed class SolutionArchitectureTests
     {
         var buildProperties = XDocument.Load(Path.Combine(RepositoryRoot, "Directory.Build.props"));
 
-        Assert.Equal("1.0.0", ReadElementValue(buildProperties, "Version"));
+        Assert.Equal("1.1.1", ReadElementValue(buildProperties, "Version"));
         Assert.Equal("Robert Prokopczuk", ReadElementValue(buildProperties, "Authors"));
 
         var releaseTargets = XDocument.Load(Path.Combine(RepositoryRoot, "Directory.Build.targets"));
@@ -910,6 +910,7 @@ public sealed class SolutionArchitectureTests
             "Inceptus.DiagramEngine.Canvas2D.EditingSession.EditingSession",
             "Inceptus.DiagramEngine.Canvas2D.EditingSession.ConnectorRoutingStatePreparer",
             "Inceptus.DiagramEngine.Canvas2D.EditingSession.EditingSessionAttachResult",
+            "Inceptus.DiagramEngine.Canvas2D.EditingSession.EditingSessionAccessMode",
             "Inceptus.DiagramEngine.Canvas2D.EditingSession.EditingSessionAttachStatus",
             "Inceptus.DiagramEngine.Canvas2D.EditingSession.EditingSessionConfiguration",
             "Inceptus.DiagramEngine.Canvas2D.EditingSession.EditingSessionDiagnosticCodes",
@@ -1008,6 +1009,10 @@ public sealed class SolutionArchitectureTests
             "Inceptus.DiagramEngine.Bpmn.Blazor.BpmnModelerNativeImportOptions",
             "Inceptus.DiagramEngine.Bpmn.Blazor.BpmnModelerNativeSaveStatus",
             "Inceptus.DiagramEngine.Bpmn.Blazor.BpmnModelerSaveCheckpoint",
+            "Inceptus.DiagramEngine.Bpmn.Blazor.BpmnApplicationAction",
+            "Inceptus.DiagramEngine.Bpmn.Blazor.BpmnApplicationActionContext",
+            "Inceptus.DiagramEngine.Bpmn.Blazor.BpmnApplicationActionProvider",
+            "Inceptus.DiagramEngine.Bpmn.Blazor.BpmnApplicationActionInvocationEventArgs",
             "Microsoft.Extensions.DependencyInjection.BpmnModelerServiceCollectionExtensions",
         ];
         var assembly = LoadProductionAssembly(BpmnBlazor);
@@ -1042,7 +1047,9 @@ public sealed class SolutionArchitectureTests
             .Where(name => name is not null)
             .Cast<string>();
 
-        Assert.Equal(["Inceptus.DiagramEngine.Blazor.App", "Inceptus.DiagramEngine.Blazor.Demo.BpmnDemoHost"], actualTypeNames.Order(StringComparer.Ordinal));
+        Assert.Equal(["Inceptus.DiagramEngine.Blazor.App", "Inceptus.DiagramEngine.Blazor.Demo.BpmnDemoHost",
+            "Inceptus.DiagramEngine.Blazor.Demo.DemoApplicationLayout", "Inceptus.DiagramEngine.Blazor.Demo.ReadOnlyBpmnDemoHost",
+            "Inceptus.DiagramEngine.Blazor.Pages.Editable", "Inceptus.DiagramEngine.Blazor.Pages.ReadOnly"], actualTypeNames.Order(StringComparer.Ordinal));
     }
 
     [Fact]

@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Inceptus.DiagramEngine.Canvas2D.EditingSession;
 using Inceptus.DiagramEngine.Contracts.Commands;
 using Inceptus.DiagramEngine.Contracts.Documents;
@@ -43,7 +44,26 @@ public sealed class PhaseN41InteractiveViewportPanningArchitectureTests
         Assert.Contains("event.ctrlKey || event.metaKey", javascript, StringComparison.Ordinal);
         Assert.Contains("event.preventDefault", javascript, StringComparison.Ordinal);
         Assert.Contains("OnCanvasWheelInput", javascript, StringComparison.Ordinal);
-        Assert.DoesNotContain("keydown", javascript, StringComparison.OrdinalIgnoreCase);
+        // Stage 4 permits only opt-in browser-default suppression for the managed
+        // context-menu shortcut. It does not add a keyboard pan mode or JS action authority.
+        var contextMenuKey = Between(javascript, "this.#onKeyDown = event => {", "        };");
+        const string expectedContextMenuKey = """
+            this.#onKeyDown = event => {
+                if (this.#canvas.dataset.applicationActionsEnabled === "true" &&
+                    (event.key === "ContextMenu" || event.key === "F10" && event.shiftKey) &&
+                    !event.ctrlKey && !event.altKey && !event.metaKey) event.preventDefault();
+            """;
+        Assert.Equal(Regex.Replace(expectedContextMenuKey, @"\s+", string.Empty),
+            Regex.Replace(contextMenuKey, @"\s+", string.Empty));
+        const string addContextMenuKey = "this.#canvas.addEventListener(\"keydown\", this.#onKeyDown);";
+        const string removeContextMenuKey = "this.#canvas.removeEventListener(\"keydown\", this.#onKeyDown);";
+        Assert.Contains(addContextMenuKey, javascript, StringComparison.Ordinal);
+        Assert.Contains(removeContextMenuKey, javascript, StringComparison.Ordinal);
+        var otherInput = javascript.Replace(contextMenuKey, string.Empty, StringComparison.Ordinal)
+            .Replace(addContextMenuKey, string.Empty, StringComparison.Ordinal)
+            .Replace(removeContextMenuKey, string.Empty, StringComparison.Ordinal)
+            .Replace("#onKeyDown;", string.Empty, StringComparison.Ordinal);
+        Assert.DoesNotContain("keydown", otherInput, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("Space", javascript, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("matrix", javascript, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("inverse", javascript, StringComparison.OrdinalIgnoreCase);
@@ -133,7 +153,13 @@ public sealed class PhaseN41InteractiveViewportPanningArchitectureTests
             StringComparison.Ordinal);
         Assert.Contains("<ToolboxPanel", razor, StringComparison.Ordinal);
         Assert.Contains("<canvas", razor, StringComparison.Ordinal);
-        Assert.Contains("class=\"object-context-menu\"", razor, StringComparison.Ordinal);
+        var contextMenu = Between(razor, "@if (_state?.ContextMenu is { } contextMenu", "@if (_modelViewPropertiesDraft is { } modelViewDraft)");
+        Assert.Contains("class=\"@(contextMenu.ApplicationContext is null ? \"object-context-menu\" : \"object-context-menu application-context-menu\")\"",
+            contextMenu, StringComparison.Ordinal);
+        Assert.Contains("@onwheel:stopPropagation", contextMenu, StringComparison.Ordinal);
+        Assert.Contains("@onpointerdown:stopPropagation", contextMenu, StringComparison.Ordinal);
+        Assert.Contains("@onpointerup:stopPropagation", contextMenu, StringComparison.Ordinal);
+        Assert.Contains("@onpointermove:stopPropagation", contextMenu, StringComparison.Ordinal);
         Assert.Contains("class=\"properties-form ", razor, StringComparison.Ordinal);
     }
 

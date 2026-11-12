@@ -98,12 +98,15 @@
              data-canvas-css-height="@CssHeight"
              data-device-pixel-ratio="@DevicePixelRatio"
              aria-label="@Text["Accessibility_DocumentPresentation"]">
-        <div class="document-editor-layout">
+        <div class="@(IsEditable ? "document-editor-layout" : "document-editor-layout read-only")">
+            @if (IsEditable)
+            {
             <ToolboxPanel Catalog="@ToolboxCatalog"
                           DisplayMode="@(DisplayPresentation?.Mode ?? BpmnModelerDisplayMode.Normal)"
                           DomIdPrefix="@_domIdPrefix"
                           SelectedItemId="@_toolboxSelection.SelectedItemId"
                           SelectedItemIdChanged="SelectToolboxItemAsync" />
+            }
             <div class="document-editor-workspace">
         <div class="editor-toolbar" role="toolbar" aria-label="@Text["Accessibility_EditorToolbar"]">
             <div class="editor-toolbar-commands">
@@ -144,6 +147,8 @@
                     }
                 }
             </nav>
+            @if (IsEditable)
+            {
             <div class="toolbar-group document-file-controls" role="group" aria-label="@Text["Accessibility_DocumentFile"]">
                 <button id="@DomId("document-properties")" type="button"
                         disabled="@(!actionBar.CanNavigateScope)"
@@ -174,6 +179,7 @@
             <SmartEditToggle Enabled="@(_state?.SmartEditEnabled ?? true)"
                              Disabled="@(_state is not { IsInitialized: true, IsDisposed: false })"
                              EnabledChanged="SetSmartEditEnabled" />
+            }
             <div class="toolbar-group zoom-controls" role="group" aria-label="@Text["Accessibility_Zoom"]">
                 <button id="@DomId("zoom-out")"
                         type="button"
@@ -195,6 +201,8 @@
                         title="@Text["Toolbar_ZoomIn"]"
                         @onclick="ZoomInAsync">+</button>
             </div>
+            @if (IsEditable)
+            {
             <div class="toolbar-group layout-controls" role="group" aria-label="@Text["Toolbar_Layout"]">
                 <button id="@DomId("align-horizontal")" class="layout-icon-action"
                         type="button" disabled="@(!actionBar.CanAlignHorizontal)"
@@ -224,6 +232,7 @@
                     </svg>
                 </button>
             </div>
+            }
         </div>
 
             <button id="@DomId("display-mode-toggle")" class="display-mode-toggle"
@@ -250,12 +259,16 @@
                             Delete="DeleteToolboxElementAsync" Create="SmartCreateAsync" Dismiss="DismissElementToolbox" />
             <canvas @ref="_primaryCanvasElement" id="@CanvasElementId"
                     data-viewport-input-enabled="@ViewportInputEnabled"
+                    data-application-actions-enabled="@ApplicationActionsEnabled"
+                    @onkeydown="HandleCanvasContextKeyAsync"
                     class="@CanvasClass(CanvasElementId)"
                     tabindex="@CanvasTabIndex(CanvasElementId)"
                     aria-hidden="@CanvasAriaHidden(CanvasElementId)"
                     aria-label="@Text["Accessibility_RenderedDiagram"]"></canvas>
             <canvas @ref="_standbyCanvasElement" id="@StandbyCanvasElementId"
                     data-viewport-input-enabled="@ViewportInputEnabled"
+                    data-application-actions-enabled="@ApplicationActionsEnabled"
+                    @onkeydown="HandleCanvasContextKeyAsync"
                     class="@CanvasClass(StandbyCanvasElementId)"
                     tabindex="@CanvasTabIndex(StandbyCanvasElementId)"
                     aria-hidden="@CanvasAriaHidden(StandbyCanvasElementId)"
@@ -266,8 +279,12 @@
                 <div id="@(contextMenu.Kind == DocumentCanvasContextMenuKind.Background
                               ? DomId("model-context-menu")
                               : DomId("object-context-menu"))"
-                     class="object-context-menu"
+                     class="@(contextMenu.ApplicationContext is null ? "object-context-menu" : "object-context-menu application-context-menu")"
                      role="menu"
+                     tabindex="@(contextMenu.ApplicationContext is null ? null : "-1")"
+                     @onkeydown="HandleApplicationMenuKeyAsync"
+                     @onkeydown:preventDefault="@(contextMenu.ApplicationContext is not null)"
+                     @onkeydown:stopPropagation="@(contextMenu.ApplicationContext is not null)"
                      aria-label="@(contextMenu.Kind == DocumentCanvasContextMenuKind.Background
                                       ? Text["Accessibility_ModelActions"]
                                       : Text["Accessibility_ObjectActions"])"
@@ -420,6 +437,32 @@
                                     role="menuitem"
                                     @onclick="ExecuteDeletionContextActionAsync">@Text["Context_DeleteConnection"]</button>
                         }
+                    }
+                    @if (contextMenu.ApplicationContext is { } applicationContext)
+                    {
+                        <div class="application-action-group" role="group" aria-labelledby="@DomId("application-actions-heading")">
+                            <div id="@DomId("application-actions-heading")" class="application-action-heading">@Text["Context_ApplicationActions"]</div>
+                            @if (contextMenu.IsApplicationDiscoveryPending)
+                            {
+                                <div role="status" class="application-action-status">@Text["Context_LoadingActions"]</div>
+                            }
+                            @for (var index = 0; index < contextMenu.ApplicationActions.Length; index++)
+                            {
+                                var action = contextMenu.ApplicationActions[index];
+                                var reasonId = DomId($"application-action-reason-{index}");
+                                <button @key="action.Id" type="button" role="menuitem"
+                                        data-application-action-id="@action.Id"
+                                        aria-disabled="@(!action.IsEnabled ? "true" : "false")"
+                                        aria-describedby="@(action.IsEnabled || string.IsNullOrWhiteSpace(action.DisabledExplanation) ? null : reasonId)"
+                                        @onclick="() => ExecuteApplicationMenuActionAsync(applicationContext.RequestVersion, action.Id)">
+                                    <span>@action.Label</span>
+                                    @if (!action.IsEnabled && !string.IsNullOrWhiteSpace(action.DisabledExplanation))
+                                    {
+                                        <span id="@reasonId" class="application-action-explanation">@action.DisabledExplanation</span>
+                                    }
+                                </button>
+                            }
+                        </div>
                     }
                 </div>
             }
@@ -730,6 +773,8 @@
 </main>
 
 @code {
+    private bool IsEditable => (_state?.Session?.AccessMode ?? CompositionFactory.AccessMode) == EditingSessionAccessMode.Editable;
+
     [CascadingParameter]
     internal BpmnModelerDisplayPresentation? DisplayPresentation { get; set; }
 
@@ -1216,6 +1261,7 @@
         }
 
         await FocusNewDiagramConfirmationAsync();
+        await UpdateApplicationMenuFocusAsync();
         if (_editColoursFocusPending && _modelViewPropertiesDraft is { ColourEditor: null })
         {
             _editColoursFocusPending = false;
@@ -1256,6 +1302,7 @@
             await host.DisposeAsync();
         }
 
+        await DisposeApplicationMenuModuleAsync();
         _componentLifetime.Dispose();
     }
 

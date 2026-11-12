@@ -1,3 +1,6 @@
+using System.Globalization;
+using System.Text.RegularExpressions;
+
 namespace Inceptus.DiagramEngine.UnitTests.Architecture;
 
 public sealed class PhaseN103NativeDocumentPresentationArchitectureTests
@@ -152,6 +155,8 @@ public sealed class PhaseN103NativeDocumentPresentationArchitectureTests
             "Inceptus.DiagramEngine.Blazor",
             "Demo",
             "BpmnDemoHost.razor.css");
+        var layoutStyles = ReadProductionFile(
+            "Inceptus.DiagramEngine.Blazor", "Demo", "DemoApplicationLayout.razor.css");
         var rootStyles = ReadProductionFile(
             "Inceptus.DiagramEngine.Bpmn.Blazor",
             "Components",
@@ -175,7 +180,8 @@ public sealed class PhaseN103NativeDocumentPresentationArchitectureTests
         Assert.Contains("aria-label=\"Import BPMN 2.0.2\"", component, StringComparison.Ordinal);
         Assert.Contains("aria-label=\"Export BPMN 2.0.2\"", component, StringComparison.Ordinal);
         Assert.Contains(".document-format-menu[hidden] { display: none; }", styles, StringComparison.Ordinal);
-        Assert.Contains("height: 100dvh", styles, StringComparison.Ordinal);
+        Assert.Contains("<DemoApplicationLayout", component, StringComparison.Ordinal);
+        Assert.Contains("height: 100dvh", layoutStyles, StringComparison.Ordinal);
         Assert.Contains("height: 100%", rootStyles, StringComparison.Ordinal);
         Assert.DoesNotContain("100dvh", rootStyles, StringComparison.Ordinal);
         Assert.Contains("html, body, #app { width: 100%; height: 100%; margin: 0; }",
@@ -191,6 +197,50 @@ public sealed class PhaseN103NativeDocumentPresentationArchitectureTests
             StringComparison.Ordinal);
         Assert.DoesNotContain("width: min(1100px, 100%)", styles,
             StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void DemoApplicationMenusStackAboveTheModelerToolbarAndBelowModalSurfaces()
+    {
+        var layout = ReadProductionFile("Inceptus.DiagramEngine.Blazor", "Demo", "DemoApplicationLayout.razor.css");
+        var host = ReadProductionFile("Inceptus.DiagramEngine.Blazor", "Demo", "BpmnDemoHost.razor.css");
+        var canvas = ReadProductionFile("Inceptus.DiagramEngine.Bpmn.Blazor", "Components", "DocumentCanvas.razor.css");
+        var settings = ReadProductionFile("Inceptus.DiagramEngine.Bpmn.Blazor", "Components", "EditorParameters.razor.css");
+        var applicationToolbar = ZIndex(layout, ".demo-host ::deep .host-toolbar");
+
+        // Application file menus overlap the modeler's breadcrumb row. Equal z-indices
+        // let that later DOM sibling paint over the menus and intercept their actions.
+        Assert.True(applicationToolbar > ZIndex(canvas, ".editor-toolbar"));
+        Assert.True(applicationToolbar < ZIndex(host, ".publication-dialog-backdrop"));
+        Assert.True(applicationToolbar < ZIndex(settings, ".editor-parameters-backdrop"));
+
+        static int ZIndex(string styles, string selector)
+        {
+            var block = Regex.Match(styles, Regex.Escape(selector) + @"\s*\{(?<body>[^}]*)\}", RegexOptions.CultureInvariant);
+            Assert.True(block.Success, $"Missing CSS rule: {selector}");
+            var declaration = Regex.Match(block.Groups["body"].Value, @"\bz-index\s*:\s*(?<value>\d+)\s*;", RegexOptions.CultureInvariant);
+            Assert.True(declaration.Success, $"Missing stacking order: {selector}");
+            return int.Parse(declaration.Groups["value"].Value, CultureInfo.InvariantCulture);
+        }
+    }
+
+    [Fact]
+    public void SharedDemoLayoutConstrainsSettingsToTheViewportIncludingPadding()
+    {
+        var styles = ReadProductionFile("Inceptus.DiagramEngine.Blazor", "Demo", "DemoApplicationLayout.razor.css");
+        var panel = Rule(".demo-host ::deep .editor-parameters");
+        Assert.Contains("box-sizing: border-box;", panel, StringComparison.Ordinal);
+        Assert.Contains("max-height: calc(100dvh - 2rem);", panel, StringComparison.Ordinal);
+        Assert.Contains("overflow: auto;", panel, StringComparison.Ordinal);
+        Assert.Contains("min-width: 0;", Rule(".demo-host ::deep .editor-parameters fieldset"), StringComparison.Ordinal);
+        Assert.Contains("box-sizing: border-box;", Rule(".demo-host ::deep .editor-parameters input"), StringComparison.Ordinal);
+
+        string Rule(string selector)
+        {
+            var block = Regex.Match(styles, Regex.Escape(selector) + @"\s*\{(?<body>[^}]*)\}", RegexOptions.CultureInvariant);
+            Assert.True(block.Success, $"Missing application-scoped responsive rule: {selector}");
+            return block.Groups["body"].Value;
+        }
     }
 
     [Fact]

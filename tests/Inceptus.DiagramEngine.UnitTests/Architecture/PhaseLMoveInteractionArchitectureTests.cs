@@ -67,12 +67,27 @@ public sealed class PhaseLMoveInteractionArchitectureTests
             "Inceptus.DiagramEngine.Canvas2D",
             "EditingSession",
             "EditingSession.Interaction.cs");
+        var sessionCommandsSource = ReadProductionFile(
+            "Inceptus.DiagramEngine.Canvas2D",
+            "EditingSession",
+            "EditingSession.Commands.cs");
+        var submission = Between(sessionCommandsSource,
+            "private ValueTask<HistoryOperationResult> ExecuteCommandUnderGateAsync(",
+            "private static HistoryOperationResult ReadOnlyHistoryResult(");
 
         Assert.Equal(1, Count(releaseBody, "new MoveVisualStateCommand("));
         Assert.Equal(1, Count(releaseBody, "_session.CompleteMoveGestureAsync("));
         Assert.DoesNotContain("new CommandProcessor(", controllerSource, StringComparison.Ordinal);
-        Assert.Contains("History.ExecuteAsync(", sessionInteractionSource, StringComparison.Ordinal);
-        Assert.Contains("_commandProcessor,", sessionInteractionSource, StringComparison.Ordinal);
+        Assert.Equal(1, Count(sessionInteractionSource, "ExecuteCommandUnderGateAsync("));
+        Assert.Contains("TryEnterCommandAsync", sessionInteractionSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("History.ExecuteAsync(", sessionInteractionSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("_commandProcessor", sessionInteractionSource, StringComparison.Ordinal);
+        Assert.Contains("_accessMode == EditingSessionAccessMode.ReadOnly", submission, StringComparison.Ordinal);
+        Assert.Contains("? ValueTask.FromResult(ReadOnlyHistoryResult(", submission, StringComparison.Ordinal);
+        Assert.Contains(": History.ExecuteAsync(_commandProcessor, command, cancellationToken)",
+            submission, StringComparison.Ordinal);
+        Assert.Equal(1, Count(ReadProductionDirectory(
+            "Inceptus.DiagramEngine.Canvas2D", "EditingSession"), "History.ExecuteAsync("));
     }
 
     [Fact]

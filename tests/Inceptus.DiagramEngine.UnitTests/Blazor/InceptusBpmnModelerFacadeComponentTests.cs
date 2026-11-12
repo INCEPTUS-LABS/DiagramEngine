@@ -18,8 +18,62 @@ using Microsoft.JSInterop;
 
 namespace Inceptus.DiagramEngine.UnitTests.Blazor;
 
-public sealed class InceptusBpmnModelerFacadeComponentTests
+public sealed partial class InceptusBpmnModelerFacadeComponentTests
 {
+    [Fact]
+    public async Task Stage3ReadOnlyRootRendersInspectionControlsWithoutAuthoringChrome()
+    {
+        using var services = CreateServices();
+        await using var renderer = new HtmlRenderer(services, NullLoggerFactory.Instance);
+        var root = await renderer.Dispatcher.InvokeAsync(() => renderer.RenderComponentAsync<InceptusBpmnModeler>(
+            Parameters((nameof(InceptusBpmnModeler.AccessMode),
+                Inceptus.DiagramEngine.Canvas2D.EditingSession.EditingSessionAccessMode.ReadOnly))));
+        var markup = await renderer.Dispatcher.InvokeAsync(root.ToHtmlString);
+        Assert.Contains("document-editor-layout read-only", markup, StringComparison.Ordinal);
+        Assert.Contains("zoom-controls", markup, StringComparison.Ordinal);
+        Assert.Contains("scope-breadcrumb", markup, StringComparison.Ordinal);
+        Assert.DoesNotContain("history-controls", markup, StringComparison.Ordinal);
+        Assert.DoesNotContain("layout-controls", markup, StringComparison.Ordinal);
+        Assert.DoesNotContain("document-file-controls", markup, StringComparison.Ordinal);
+        Assert.DoesNotContain("toolbox-panel", markup, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Stage3OmittedModeIsEditableAndUndefinedModeIsRejected()
+    {
+        using var services = CreateServices();
+        await using var renderer = new ExceptionRecordingRenderer(services);
+        await renderer.InitializeAsync(ParameterView.Empty);
+        Assert.Equal(Inceptus.DiagramEngine.Canvas2D.EditingSession.EditingSessionAccessMode.Editable,
+            (await GetFacade(renderer.Component).CompositionFactory.CreateAsync()).Configuration.AccessMode);
+        await using var invalid = new ExceptionRecordingRenderer(services);
+        await invalid.InitializeAsync(Parameters((nameof(InceptusBpmnModeler.AccessMode),
+            (Inceptus.DiagramEngine.Canvas2D.EditingSession.EditingSessionAccessMode)99)));
+        Assert.IsType<ArgumentOutOfRangeException>(Assert.Single(invalid.Exceptions));
+    }
+
+    [Theory]
+    [InlineData(Inceptus.DiagramEngine.Canvas2D.EditingSession.EditingSessionAccessMode.Editable)]
+    [InlineData(Inceptus.DiagramEngine.Canvas2D.EditingSession.EditingSessionAccessMode.ReadOnly)]
+    public async Task Stage3RootCapturesAccessModeAndRejectsRuntimeChanges(
+        Inceptus.DiagramEngine.Canvas2D.EditingSession.EditingSessionAccessMode mode)
+    {
+        using var services = CreateServices();
+        await using var renderer = new ExceptionRecordingRenderer(services);
+        await renderer.InitializeAsync(Parameters((nameof(InceptusBpmnModeler.AccessMode), mode)));
+        var facade = GetFacade(renderer.Component);
+        Assert.Equal(mode, (await facade.CompositionFactory.CreateAsync()).Configuration.AccessMode);
+        await renderer.SetParametersAsync(Parameters((nameof(InceptusBpmnModeler.AccessMode), mode)));
+        Assert.Empty(renderer.Exceptions);
+        await renderer.SetParametersAsync(Parameters((nameof(InceptusBpmnModeler.AccessMode),
+            mode == Inceptus.DiagramEngine.Canvas2D.EditingSession.EditingSessionAccessMode.ReadOnly
+                ? Inceptus.DiagramEngine.Canvas2D.EditingSession.EditingSessionAccessMode.Editable
+                : Inceptus.DiagramEngine.Canvas2D.EditingSession.EditingSessionAccessMode.ReadOnly)));
+        Assert.IsType<InvalidOperationException>(Assert.Single(renderer.Exceptions));
+        Assert.Same(facade, GetFacade(renderer.Component));
+        Assert.Equal(mode, (await facade.CompositionFactory.CreateAsync()).Configuration.AccessMode);
+    }
+
     [Fact]
     public async Task RootSupportsOptionalParametersAndPreservesContainerAttributes()
     {

@@ -11,8 +11,8 @@
 @inject Microsoft.JSInterop.IJSRuntime JavaScript
 @implements IAsyncDisposable
 @{ var toolbar = CaptureToolbarPresentation(); }
-<div class="demo-host" data-display-mode="@_displayMode.ToString().ToLowerInvariant()"
-     @onkeydown="HandleHostKeyDown" @onclick="CloseDocumentMenu" data-native-document-operation="@_nativeDocumentOperationStatus"
+<DemoApplicationLayout DisplayMode="_displayMode"
+     KeyDown="HandleHostKeyDown" Click="CloseDocumentMenu" data-native-document-operation="@_nativeDocumentOperationStatus"
      data-native-document-error-code="@(_nativeDocumentOperationErrorCode ?? string.Empty)"
      data-publish-operation="@_publishOperationStatus" data-publish-error-code="@(_publishOperationErrorCode ?? string.Empty)"
      data-publication-dialog="@(_publicationDialogOpen ? "open" : "closed")"
@@ -24,7 +24,7 @@
          role="toolbar" aria-label="Document operations" @onclick:stopPropagation>
         <div class="document-format-control">
             <button type="button" aria-expanded="@(_documentMenu == "import" ? "true" : "false")" aria-controls="@DomId("import-formats")"
-                    disabled="@(!toolbar.CanTransfer)" @onclick='() => ToggleDocumentMenu("import")'>Import <span aria-hidden="true">▾</span></button>
+                    disabled="@(!toolbar.CanTransfer)" @onclick="ToggleImportMenu">Import <span aria-hidden="true">▾</span></button>
             <div id="@DomId("import-formats")" class="document-format-menu" hidden="@(_documentMenu != "import")">
                 <label id="@DomId("import")"
                        class="native-document-import-action format-choice"
@@ -51,7 +51,7 @@
         </div>
         <div class="document-format-control">
             <button type="button" aria-expanded="@(_documentMenu == "export" ? "true" : "false")" aria-controls="@DomId("export-formats")"
-                    disabled="@(!toolbar.CanTransfer)" @onclick='() => ToggleDocumentMenu("export")'>Export <span aria-hidden="true">▾</span></button>
+                    disabled="@(!toolbar.CanTransfer)" @onclick="ToggleExportMenu">Export <span aria-hidden="true">▾</span></button>
             <div id="@DomId("export-formats")" class="document-format-menu" hidden="@(_documentMenu != "export")">
                 <button id="@DomId("export")"
                         class="format-choice"
@@ -67,11 +67,11 @@
                     BPMN 2.0.2 <small>Interchange · may omit information</small>
                 </button>
                 <button type="button" class="format-choice" aria-label="Export SVG Image"
-                        disabled="@(!toolbar.CanTransfer)" @onclick="() => ExportGraphicalAsync(GraphicalExportFormat.Svg)">
+                        disabled="@(!toolbar.CanTransfer)" @onclick="ExportSvgAsync">
                     SVG Image <small>.svg</small>
                 </button>
                 <button type="button" class="format-choice" aria-label="Export PNG Image"
-                        disabled="@(!toolbar.CanTransfer)" @onclick="() => ExportGraphicalAsync(GraphicalExportFormat.Png)">
+                        disabled="@(!toolbar.CanTransfer)" @onclick="ExportPngAsync">
                     PNG Image <small>.png</small>
                 </button>
             </div>
@@ -387,4 +387,4 @@
             </section>
         </div>
     }
-</div>
+</DemoApplicationLayout>

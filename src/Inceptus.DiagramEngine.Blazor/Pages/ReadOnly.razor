@@ -1,0 +1,12 @@
+@page "/read-only/"
+@namespace Inceptus.DiagramEngine.Blazor.Pages
+@using Microsoft.AspNetCore.Components
+@using Inceptus.DiagramEngine.Blazor.Demo
+
+<ReadOnlyBpmnDemoHost @key="OrderProcess" OrderProcess="OrderProcess" />
+
+@code {
+    [SupplyParameterFromQuery(Name = "sample")] public string? Sample { get; set; }
+
+    private bool OrderProcess => string.Equals(Sample, "order", StringComparison.Ordinal);
+}

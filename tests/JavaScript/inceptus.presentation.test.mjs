@@ -137,6 +137,86 @@ const {
 } = await import(pathToFileURL(modulePath));
 const { downloadFile } = await import(pathToFileURL(path.resolve("src/Inceptus.DiagramEngine.Blazor/wwwroot/inceptus.documents.js")));
 
+test("application context keyboard normalization is opt-in, scoped and released on disposal", () => {
+    const observer = createCanvasPointerObserver("canvas", { invokeMethodAsync: async () => { throw Error("Keyboard targeting must remain managed"); } });
+    observer.start();
+    let prevented = 0;
+    const press = (key, extra = {}) => canvas.dispatch("keydown", { key, preventDefault() { prevented++; }, ...extra });
+    press("ContextMenu");
+    press("F10", { shiftKey: true });
+    assert.equal(prevented, 0);
+    canvas.dataset.applicationActionsEnabled = "true";
+    press("ContextMenu");
+    press("F10", { shiftKey: true });
+    assert.equal(prevented, 2);
+    for (const key of ["F10", "Delete", "Escape", "ArrowDown", "z"]) press(key);
+    press("F10", { shiftKey: true, ctrlKey: true });
+    press("ContextMenu", { altKey: true });
+    assert.equal(prevented, 2);
+    observer.dispose();
+    press("ContextMenu");
+    assert.equal(prevented, 2);
+    assert.equal(canvas.listeners.get("keydown").length, 0);
+});
+
+test("application menu focus clamps to its surface and supports disabled explanations and ordered keyboard activation", async () => {
+    const { focusContextMenu, handleContextMenuKey, restoreCanvasFocus } = await import(pathToFileURL(modulePath));
+    const lookup = document.getElementById;
+    const menu = new FakeElement(240, 180, 610, 470);
+    menu.parentElement = container;
+    const items = [false, true, false].map(disabled => ({
+        disabled: false, clicks: 0, isConnected: true,
+        getClientRects() { return [{}]; },
+        getAttribute(name) { return name === "aria-disabled" && disabled ? "true" : null; },
+        focus(options) { assert.deepEqual(options, { preventScroll: true }); document.activeElement = this; },
+        click() { this.clicks++; }
+    }));
+    const hidden = { ...items[0], getClientRects() { return []; } };
+    menu.querySelectorAll = () => [items[0], hidden, items[1], items[2]];
+    menu.focus = () => { document.activeElement = menu; };
+    canvas.focus = () => { document.activeElement = canvas; };
+    document.getElementById = id => id === "actions" ? menu : lookup(id);
+    document.body = new FakeElement(640, 480);
+    document.activeElement = canvas;
+    try {
+        assert.equal(focusContextMenu("actions", true), true);
+        assert.equal(menu.style.left, "392px");
+        assert.equal(menu.style.top, "292px");
+        assert.equal(document.activeElement, items[0]);
+        handleContextMenuKey("actions", "ArrowDown");
+        assert.equal(document.activeElement, items[1]); // Disabled remains focusable for its explanation.
+        handleContextMenuKey("actions", "Enter");
+        assert.equal(items[1].clicks, 0);
+        handleContextMenuKey("actions", "ArrowDown");
+        handleContextMenuKey("actions", " ");
+        assert.equal(items[2].clicks, 1);
+        handleContextMenuKey("actions", "ArrowDown");
+        assert.equal(document.activeElement, items[0]);
+        handleContextMenuKey("actions", "ArrowUp");
+        assert.equal(document.activeElement, items[2]);
+        handleContextMenuKey("actions", "Home");
+        assert.equal(document.activeElement, items[0]);
+        handleContextMenuKey("actions", "End");
+        assert.equal(document.activeElement, items[2]);
+        assert.equal(handleContextMenuKey("actions", "Delete"), false);
+        assert.equal(focusContextMenu("actions", false), true);
+        assert.equal(document.activeElement, items[2]); // Equivalent rerender must not steal focus.
+        assert.equal(restoreCanvasFocus("canvas"), false);
+        document.activeElement = document.body;
+        assert.equal(restoreCanvasFocus("canvas"), true);
+        assert.equal(document.activeElement, canvas);
+        menu.querySelectorAll = () => [];
+        focusContextMenu("actions", true);
+        assert.equal(document.activeElement, menu); // Pending async discovery still has a focus target.
+        assert.equal(handleContextMenuKey("actions", "ArrowDown"), false);
+        assert.equal(focusContextMenu("missing", true), false);
+    } finally {
+        document.getElementById = lookup;
+        delete document.activeElement;
+        delete document.body;
+    }
+});
+
 test("editor preferences use separate browser storage and report unavailable writes", async () => {
     const { readEditorSettings, writeEditorSettings } = await import(pathToFileURL(modulePath));
     const values = new Map();

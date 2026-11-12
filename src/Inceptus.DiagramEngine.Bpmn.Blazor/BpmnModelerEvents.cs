@@ -25,6 +25,8 @@ public enum BpmnModelerOperation
     Import,
     Export,
     Publish,
+    Selection,
+    ApplicationAction,
 }
 
 /// <summary>

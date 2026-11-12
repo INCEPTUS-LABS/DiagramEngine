@@ -58,6 +58,11 @@ internal sealed partial class DocumentCanvasHost
                 }
             }
 
+            if (currentSession.CaptureState().AccessMode == EditingSessionAccessMode.ReadOnly &&
+                options?.ReprepareIncompatibleRouting == true)
+                return outcome = NativeDocumentHostImportResult.Rejected(
+                    [Error("BPMN_MODELER_READ_ONLY_ROUTING_RECOVERY", "Read-only loading requires exact saved routing and cannot recover routing.")]);
+
             if (document is null)
             {
                 return outcome = NativeDocumentHostImportResult.Rejected(

@@ -1,1 +1,14 @@
-<Inceptus.DiagramEngine.Blazor.Demo.BpmnDemoHost />
+@using Microsoft.AspNetCore.Components
+@using Microsoft.AspNetCore.Components.Routing
+
+<Router AppAssembly="@typeof(App).Assembly">
+    <Found Context="routeData">
+        <RouteView RouteData="@routeData" />
+    </Found>
+    <NotFound>
+        <main>
+            <h1>Page not found</h1>
+            <a href="./">Open the editable demo</a>
+        </main>
+    </NotFound>
+</Router>

@@ -1,5 +1,79 @@
 # Release notes
 
+## 1.1.1
+
+- Keeps the source Demo in one `Inceptus.DiagramEngine.Blazor` project, with an
+  editable page at `/` and a read-only page at `/read-only/`. Both pages use the
+  same full-height application layout and responsive toolbar styling. Direct
+  navigation and refresh work when the host serves the Blazor entry point for
+  client-side routes. The Demo remains a source example, not a NuGet package.
+- Limits the read-only page's application toolbar to Settings while retaining
+  diagram inspection, semantic selection, Process/SubProcess navigation,
+  pan/zoom, maximise/restore and application-owned contextual actions. Inspect
+  details opens an application-owned panel. Settings remain editor preferences
+  outside the native document; inspection does not edit it or add History.
+- Retains Pools and Lanes as the default sample and exposes the nested Order
+  Process sample at `/read-only/?sample=order`. Existing `?example=read-only`
+  links redirect to the read-only route. Page changes dispose the previous
+  modeler and cancel its pending application actions; maximise/restore retains
+  the current modeler, selection, scope and viewport.
+- Preserves the editable Demo's editing, Undo/Redo, import/export, validation,
+  publishing and Settings workflows. The 1.1.0 public read-only and document
+  APIs remain unchanged, including immutable access mode and explicit attachment
+  replacement. Native `Inceptus.Document` formatVersion **2** and
+  `Inceptus.PublishedProcess` formatVersion **1** remain unchanged; no document
+  migration or process-execution change is introduced.
+- Updates all seven packages together to **1.1.1**, including the unchanged
+  `Inceptus.Bpmn.Integration` identity. Canvas2D requires Runtime exactly
+  `[1.1.1]`; other family dependencies retain minimum-version ranges. The target
+  remains **net10.0**, source SDK **10.0.403**, and Microsoft production
+  dependencies **10.0.14**.
+
+## 1.1.0
+
+- Adds an opt-in read-only mode to the existing `InceptusBpmnModeler` component.
+  `AccessMode` is fixed for the component's lifetime and defaults to `Editable`,
+  preserving existing editor integrations. Read-only sessions reject native edits,
+  Undo/Redo and publication metadata changes while retaining selection, hover,
+  pan/zoom and transient visibility. Inspection preserves the attached document,
+  revision, identities, geometry, routing and native History.
+- Adds `IBpmnDiagramPresentation`, immutable presentation snapshots and
+  `SelectionChanged` notifications. Selection identifies semantic elements or
+  relationships and their exact presentation parts, including labels and
+  Pool/Lane/Participant headers. New stamped selection and Process/SubProcess
+  navigation APIs reject stale component, attachment, context or selection state.
+  Read-only navigation does not add native History; editable navigation retains
+  its existing History behavior.
+- Adds per-component application-owned contextual actions with asynchronous
+  discovery, enabled/disabled descriptors, explanatory text and invocation
+  callbacks. Actions receive immutable semantic context and cooperative
+  cancellation. Retired menus and changed targets invalidate pending work.
+  Keyboard menu operation, dismissal and focus return are supported. Existing
+  editable menus remain unchanged when no application provider is configured.
+- Extends the existing explicit document-replacement lifecycle to read-only
+  attachments. Successful replacement remains read-only and retires stale
+  contexts; rejected or cancelled replacement preserves the accepted attachment.
+  Routing recovery must be performed separately before read-only attachment.
+  Read-only enforcement is a component/session boundary, not a security sandbox
+  for application code that independently owns a mutable runtime.
+- Adds a public source Demo inspection example at `?example=read-only`, with
+  Pools and Lanes and Order Process samples, application-owned details, strict
+  native import, reload, disposal/remount and an independent editable comparison.
+  The default Demo remains editable. Existing source Demo build/run instructions
+  and examples remain available in the README.
+- Aligns modeler toolbar button heights and corrects source Demo startup module
+  loading. The resize-cursor correction already included in 1.0.0 is retained.
+- Preserves the existing `IBpmnDocumentEditor` API, native `Inceptus.Document`
+  formatVersion **2** and `Inceptus.PublishedProcess` formatVersion **1**.
+  No document migration or process-execution change is introduced. Application
+  callbacks own external effects; cancellation cannot reverse effects already
+  performed. No simulation runtime or external overlay lifecycle is added.
+- Updates all seven packages together to **1.1.0**, including the unchanged
+  `Inceptus.Bpmn.Integration` identity. Canvas2D requires Runtime exactly
+  `[1.1.0]`; other family dependencies retain minimum-version ranges. The target
+  remains **net10.0**, source SDK **10.0.403**, and Microsoft production
+  dependencies **10.0.14**.
+
 ## 1.0.0
 
 - Renames the six engine packages, assemblies and public namespace prefixes from

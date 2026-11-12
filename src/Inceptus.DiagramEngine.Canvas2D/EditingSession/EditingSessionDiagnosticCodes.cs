@@ -2,6 +2,8 @@ namespace Inceptus.DiagramEngine.Canvas2D.EditingSession;
 
 public static class EditingSessionDiagnosticCodes
 {
+    internal const string ReadOnly = "EDITING_SESSION_READ_ONLY";
+
     public const string InvalidAttachment = "EDITING_SESSION_INVALID_ATTACHMENT";
     public const string PipelineFailed = "EDITING_SESSION_PIPELINE_FAILED";
     public const string PipelineCancelled = "EDITING_SESSION_PIPELINE_CANCELLED";

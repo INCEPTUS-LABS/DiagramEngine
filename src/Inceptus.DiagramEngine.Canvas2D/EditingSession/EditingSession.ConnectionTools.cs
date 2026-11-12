@@ -19,6 +19,9 @@ public sealed partial class EditingSession
         IEnumerable<VisualStateId>? sources = null;
         if (creationId is not null)
         {
+            if (state.AccessMode == EditingSessionAccessMode.ReadOnly)
+                return ValueTask.FromResult(ReadOnlyInteractionResult());
+
             if (!catalog.TryGetRegistration(creationId, out var registration) || !state.IsGraphicalInteractionEnabled ||
                 state.EditorState.ActiveGesture is not null || state.ProjectedGraph is null ||
                 !TryCaptureDocumentSnapshot(out var document) || document.DocumentId != state.DocumentId ||

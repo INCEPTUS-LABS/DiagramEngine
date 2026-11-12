@@ -16,7 +16,7 @@ using Inceptus.DiagramEngine.Runtime.Documents;
 
 namespace Inceptus.DiagramEngine.IntegrationTests;
 
-public sealed class PhaseN103NativeDocumentPresentationIntegrationTests
+public sealed partial class PhaseN103NativeDocumentPresentationIntegrationTests
 {
     private static readonly SemanticElementId PoolAId =
         new("inceptus:n10.3:organization:pool:a");
