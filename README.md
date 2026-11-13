@@ -1,9 +1,11 @@
 # Inceptus Diagram Engine
 
 A reusable BPMN modeler with immutable native documents and a standalone process
-presentation export. This README describes **1.1.1**, targeting **net10.0**, with
-SDK **10.0.403** for source builds. Version 1.1.1 gives the source Demo editable
-and read-only pages with a shared application layout. The read-only inspection,
+presentation export. This README describes **1.1.2**, targeting **net10.0**, with
+SDK **10.0.403** for source builds. Version 1.1.2 stabilises selection-readiness
+verification in the source tests without changing modeler behavior. The source
+Demo retains editable and read-only pages with a shared application layout.
+The read-only inspection,
 semantic selection, guarded navigation and application-owned contextual action
 APIs introduced in 1.1.0 remain unchanged. Existing integrations remain editable
 by default. This documentation does not announce package availability.
@@ -53,11 +55,11 @@ transitively; hosts using only editing still need only the Bpmn.Blazor reference
 ## Embed the modeler
 
 The supported hosting model is a **standalone Blazor WebAssembly application** on
-.NET 10. Use the aligned 1.1.1 family when it is available from your package source:
+.NET 10. Use the aligned 1.1.2 family when it is available from your package source:
 
 ```xml
-<PackageReference Include="Inceptus.DiagramEngine.Bpmn.Blazor" Version="1.1.1" />
-<PackageReference Include="Inceptus.Bpmn.Integration" Version="1.1.1" />
+<PackageReference Include="Inceptus.DiagramEngine.Bpmn.Blazor" Version="1.1.2" />
+<PackageReference Include="Inceptus.Bpmn.Integration" Version="1.1.2" />
 ```
 
 Register the modeler in the application's `Program.cs`. The extension namespace is `Microsoft.Extensions.DependencyInjection`:

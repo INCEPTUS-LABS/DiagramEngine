@@ -1,5 +1,22 @@
 # Release notes
 
+## 1.1.2
+
+- Stabilises selection-readiness regression verification by holding the scene
+  rebuild until its not-ready state has been observed. The test retains its
+  readiness-transition, ordered semantic selection, notification, presentation
+  stamp, document-integrity and History assertions.
+- Preserves the modeler APIs and behavior, editable and read-only source Demo
+  pages, shared layout and integration contracts described in 1.1.1. Native
+  `Inceptus.Document` formatVersion **2** and `Inceptus.PublishedProcess`
+  formatVersion **1** remain unchanged; no document migration or process-execution
+  change is introduced.
+- Updates all seven packages together to **1.1.2**, including the unchanged
+  `Inceptus.Bpmn.Integration` identity. Canvas2D requires Runtime exactly
+  `[1.1.2]`; other family dependencies retain minimum-version ranges. The target
+  remains **net10.0**, source SDK **10.0.403**, and Microsoft production
+  dependencies **10.0.14**.
+
 ## 1.1.1
 
 - Keeps the source Demo in one `Inceptus.DiagramEngine.Blazor` project, with an

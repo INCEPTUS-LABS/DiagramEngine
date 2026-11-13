@@ -95,11 +95,28 @@ public sealed partial class DocumentCanvasHostTests
         var before = fixture.Facade.GetDocument().Snapshot!;
         var initial = fixture.Facade.CapturePresentation();
         var views = new List<bool>();
-        fixture.Facade.ViewChanged += () => views.Add(fixture.Facade.CaptureEditorContext()!.CanReplaceDocument);
+        TaskCompletionSource? rebuildingObserved = null;
+        fixture.Facade.ViewChanged += () =>
+        {
+            var ready = fixture.Facade.CaptureEditorContext()!.CanReplaceDocument;
+            views.Add(ready);
+            if (!ready) rebuildingObserved?.TrySetResult();
+        };
         // Establish the existing ViewChanged attachment baseline before transient inspection.
         await fixture.Host.ZoomInAsync();
         views.Clear();
-        var selected = await fixture.Facade.SelectVisualAsync(initial.Stamp!, new("v-source"));
+        rebuildingObserved = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        Task<BpmnPresentationOperationResult>? selection = null;
+        // Hold the rebuild until the callback observes it; a live readiness capture
+        // otherwise can see Ready before the rebuilding notification is delivered.
+        await A24DuringPausedSceneAsync(fixture.Host,
+            () => selection = fixture.Facade.SelectVisualAsync(initial.Stamp!, new("v-source")).AsTask(),
+            async () =>
+            {
+                await rebuildingObserved.Task.WaitAsync(TimeSpan.FromSeconds(10));
+                Assert.False(fixture.Facade.CaptureEditorContext()!.CanReplaceDocument);
+            });
+        var selected = await selection!;
         Assert.True(selected.Succeeded, NewDiagramDiagnostics(selected.Diagnostics));
         var target = Assert.Single(selected.Presentation.Selection);
         Assert.Equal(new VisualStateId("v-source"), target.VisualStateId);

@@ -1,8 +1,8 @@
 <Project>
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
-    <Version>1.1.1</Version>
-    <PublicationBaselineVerifiedUtc>2026-11-12T15:17:36Z</PublicationBaselineVerifiedUtc>
+    <Version>1.1.2</Version>
+    <PublicationBaselineVerifiedUtc>2026-11-13T09:37:10Z</PublicationBaselineVerifiedUtc>
     <Authors>Robert Prokopczuk</Authors>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
