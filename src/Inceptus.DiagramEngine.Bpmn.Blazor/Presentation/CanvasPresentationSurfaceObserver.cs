@@ -1,3 +1,4 @@
+using Inceptus.DiagramEngine.Canvas2D.EditingSession;
 using Inceptus.DiagramEngine.Canvas2D.Rendering;
 using Microsoft.JSInterop;
 
@@ -58,6 +59,7 @@ internal sealed class CanvasPresentationSurfaceObserver :
     private readonly CanvasPresentationSurfaceCallback _callback;
     private readonly DotNetObjectReference<CanvasPresentationSurfaceCallback> _callbackReference;
     private int _disposed;
+    internal LifecycleObservation? LifecycleObservation { get; set; }
 
     internal CanvasPresentationSurfaceObserver(
         IJSObjectReference module,
@@ -99,6 +101,7 @@ internal sealed class CanvasPresentationSurfaceObserver :
         {
             // The component is already leaving the presentation tree. Releasing every managed
             // interop handle takes precedence over surfacing an un-actionable browser callback.
+            LifecycleObservation?.Failure("SurfaceBrowserCleanupFailure", exception);
         }
 
         try
@@ -107,9 +110,11 @@ internal sealed class CanvasPresentationSurfaceObserver :
         }
         catch (Exception exception) when (IsNonFatal(exception))
         {
+            LifecycleObservation?.Failure("SurfaceReferenceCleanupFailure", exception);
         }
 
         _callback.Disable();
+        LifecycleObservation?.Record("SurfaceCallbackRetired");
         _callbackReference.Dispose();
         try
         {
@@ -117,6 +122,7 @@ internal sealed class CanvasPresentationSurfaceObserver :
         }
         catch (Exception exception) when (IsNonFatal(exception))
         {
+            LifecycleObservation?.Failure("SurfaceModuleCleanupFailure", exception);
         }
 #pragma warning restore CA1031
     }

@@ -1,0 +1,7 @@
+@namespace Inceptus.DiagramEngine.Blazor.Demo
+<nav class="demo-mode-navigation" aria-label="Demo mode">
+    <a href="./" aria-current="@(Mode == "Editable" ? "page" : null)">Editable</a>
+    <a href="read-only/" aria-current="@(Mode == "ReadOnly" ? "page" : null)">ReadOnly</a>
+    <a href="simulation/" aria-current="@(Mode == "Simulation" ? "page" : null)">Simulation</a>
+</nav>
+@code { [Parameter] public string Mode { get; set; } = "Editable"; }

@@ -23,7 +23,7 @@ public sealed partial class EditingSession
                 }
             }
 
-            var result = await _renderer.RenderAsync(scene.WithGrid(GridSettings)).ConfigureAwait(false);
+            await RenderDecoratedSceneUnderGateAsync(scene, generation).ConfigureAwait(false);
             lock (_sync)
             {
                 if (!_closing && !_closed && generation == _generation &&
@@ -31,9 +31,6 @@ public sealed partial class EditingSession
                 {
                     // Graphics execution is post-install presentation work. A failure never
                     // invalidates the current scene or changes Ready to RuntimeFaulted.
-                    _presentationDiagnostics = result.Diagnostics;
-                    _presentedGeneration = result.Succeeded ? generation : null;
-                    _pendingPanPresentation = null;
                     stateChanged = true;
                 }
             }
@@ -74,6 +71,7 @@ public sealed partial class EditingSession
                     ReferenceEquals(scene, _lastKnownGoodScene))
                 {
                     _presentationDiagnostics = result.Diagnostics;
+                    _decorationPresentation = null;
                 }
             }
         }
@@ -97,6 +95,11 @@ public sealed partial class EditingSession
             // Invalidate Pan reuse before awaiting browser resize, including DPR-only
             // observations. A concurrent result retains its original surface generation.
             _surfaceGeneration = checked(_surfaceGeneration + 1);
+            _presentedGeneration = null;
+            if (_decorationPresentation is { } previousDecoration)
+                _decorationPresentation = new(previousDecoration.AttachmentId, previousDecoration.DocumentId,
+                    previousDecoration.DocumentRevision, previousDecoration.PresentationContext,
+                    previousDecoration.BaseSceneGeneration, previousDecoration.InputRevision, false, false);
             _pendingPanPresentation = null;
             _surfaceOperations++;
         }
@@ -234,14 +237,12 @@ public sealed partial class EditingSession
                 }
             }
 
-            renderResult = await _renderer.RenderAsync(scene.WithGrid(GridSettings), linked.Token).ConfigureAwait(false);
+            renderResult = await RenderDecoratedSceneUnderGateAsync(scene, generation, linked.Token).ConfigureAwait(false);
             lock (_sync)
             {
                 if (!_closing && !_closed && generation == _generation &&
                     ReferenceEquals(scene, _currentScene))
                 {
-                    _presentationDiagnostics = renderResult.Diagnostics;
-                    _presentedGeneration = renderResult.Succeeded ? generation : null;
                     stateChanged = true;
                 }
             }

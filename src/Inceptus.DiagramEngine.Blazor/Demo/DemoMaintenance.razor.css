@@ -1,0 +1,4 @@
+.demo-maintenance { flex: 0 0 auto; max-height: 32dvh; overflow: auto; padding: .3rem .75rem; font-size: .8rem; border-bottom: 1px solid #475569; background: #0f172a; }
+summary { cursor: pointer; }
+.maintenance-content { display: flex; flex-wrap: wrap; gap: .5rem; align-items: start; }
+.maintenance-content ::deep details { position: static; margin: .4rem 0; max-height: 24dvh; max-width: min(32rem, 100%); }

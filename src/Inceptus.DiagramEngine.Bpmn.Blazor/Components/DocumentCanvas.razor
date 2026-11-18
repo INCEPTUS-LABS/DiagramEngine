@@ -254,9 +254,77 @@
         </div>
 
         <div id="@ContainerElementId" class="document-canvas-surface">
-            <ElementToolbox State="@(_newDiagramConfirmationOpen ? null : _state?.ElementToolbox)"
+            <ElementToolbox State="@(_newDiagramConfirmationOpen || _applicationToolbar is { IsDiscoveryPending: false, Actions.IsEmpty: false, Placement.NativeToolbox: not null } ? null : _state?.ElementToolbox)"
                             Properties="OpenElementToolboxPropertiesAsync" OpenSubProcess="OpenToolboxSubProcessAsync" AutoPoints="AutoPointsAsync"
                             Delete="DeleteToolboxElementAsync" Create="SmartCreateAsync" Dismiss="DismissElementToolbox" />
+            @if (!_newDiagramConfirmationOpen && _applicationToolbar is { IsDiscoveryPending: false, Actions.IsEmpty: false } toolbar)
+            {
+                <div id="@DomId("application-toolbar")" class="application-toolbar" role="toolbar"
+                     aria-label="@Text["Context_ApplicationActions"]"
+                     data-application-request="@toolbar.Context.RequestVersion"
+                     data-application-target="@toolbar.Context.Target.SemanticId.Value"
+                     @onkeydown="HandleApplicationToolbarKeyAsync" @onkeydown:stopPropagation
+                     @onclick:stopPropagation @onpointerdown:stopPropagation @onpointerup:stopPropagation
+                     @onpointermove:stopPropagation @onwheel:stopPropagation
+                     @oncontextmenu:preventDefault @oncontextmenu:stopPropagation
+                     style="@ApplicationToolbarStyle(toolbar.Placement)">
+                    @if (toolbar.Placement.NativeToolbox is { } nativeToolbox)
+                    {
+                        <CascadingValue Name="ApplicationToolbarPlacement" Value="@toolbar.Placement">
+                          <CascadingValue Name="ApplicationToolbarDismiss" Value="@ApplicationToolbarDismissCallback">
+                            <ElementToolbox State="@nativeToolbox"
+                                            Properties="OpenElementToolboxPropertiesAsync" OpenSubProcess="OpenToolboxSubProcessAsync" AutoPoints="AutoPointsAsync"
+                                            Delete="DeleteToolboxElementAsync" Create="SmartCreateAsync" Dismiss="DismissElementToolbox" />
+                          </CascadingValue>
+                        </CascadingValue>
+                    }
+                    <div class="application-toolbar-actions @(toolbar.Placement.NativeToolbox is null ? null : "with-native")" role="group" aria-label="@Text["Context_ApplicationActions"]">
+                        @for (var index = 0; index < toolbar.Placement.VisibleActionCount; index++)
+                        {
+                            var action = toolbar.Actions[index];
+                            <button @key="action.Id" type="button" data-application-action-id="@action.Id"
+                                    aria-label="@action.Label" aria-disabled="@(!action.IsEnabled ? "true" : "false")"
+                                    aria-describedby="@(!action.IsEnabled && !string.IsNullOrWhiteSpace(action.DisabledExplanation) ? DomId($"toolbar-reason-{index}") : null)"
+                                    title="@(action.IsEnabled || string.IsNullOrWhiteSpace(action.DisabledExplanation) ? action.Label : $"{action.Label}: {action.DisabledExplanation}")"
+                                    @onclick="() => ExecuteApplicationMenuActionAsync(toolbar.Context.RequestVersion, action.Id)">
+                                @RenderApplicationActionIcon(action.Icon ?? DefaultApplicationToolbarIcon)
+                            </button>
+                            @if (!action.IsEnabled && !string.IsNullOrWhiteSpace(action.DisabledExplanation))
+                            {
+                                <span id="@DomId($"toolbar-reason-{index}")" class="application-accessible-description">@action.DisabledExplanation</span>
+                            }
+                        }
+                        @if (toolbar.Placement.Overflow)
+                        {
+                            <button type="button" class="application-more" aria-label="@Text["Context_MoreActions"]"
+                                    title="@Text["Context_MoreActions"]" aria-haspopup="menu" aria-expanded="@(_applicationOverflowOpen ? "true" : "false")"
+                                    @onclick="ToggleApplicationOverflow"><span aria-hidden="true">⋯</span></button>
+                        }
+                    </div>
+                    @if (_applicationOverflowOpen && toolbar.Placement.Overflow)
+                    {
+                        <div id="@DomId("application-toolbar-overflow")" class="object-context-menu application-toolbar-overflow" role="menu"
+                             aria-label="@Text["Context_MoreActions"]" tabindex="-1"
+                             @onkeydown="HandleApplicationOverflowKeyAsync" @onkeydown:preventDefault @onkeydown:stopPropagation>
+                            @for (var index = toolbar.Placement.VisibleActionCount; index < toolbar.Actions.Length; index++)
+                            {
+                                var action = toolbar.Actions[index];
+                                var reasonId = DomId($"toolbar-overflow-reason-{index}");
+                                <button @key="action.Id" type="button" role="menuitem" data-application-action-id="@action.Id"
+                                        aria-label="@action.Label" aria-disabled="@(!action.IsEnabled ? "true" : "false")"
+                                        aria-describedby="@(action.IsEnabled || string.IsNullOrWhiteSpace(action.DisabledExplanation) ? null : reasonId)"
+                                        @onclick="() => ExecuteApplicationMenuActionAsync(toolbar.Context.RequestVersion, action.Id)">
+                                    <span class="application-action-label">@RenderApplicationActionIcon(action.Icon)<span>@action.Label</span></span>
+                                    @if (!action.IsEnabled && !string.IsNullOrWhiteSpace(action.DisabledExplanation))
+                                    {
+                                        <span id="@reasonId" class="application-action-explanation">@action.DisabledExplanation</span>
+                                    }
+                                </button>
+                            }
+                        </div>
+                    }
+                </div>
+            }
             <canvas @ref="_primaryCanvasElement" id="@CanvasElementId"
                     data-viewport-input-enabled="@ViewportInputEnabled"
                     data-application-actions-enabled="@ApplicationActionsEnabled"
@@ -274,6 +342,7 @@
                     aria-hidden="@CanvasAriaHidden(StandbyCanvasElementId)"
                     aria-label="@Text["Accessibility_RenderedDiagram"]"></canvas>
             @if (_state?.ContextMenu is { } contextMenu &&
+                (contextMenu.ApplicationContext is null || DocumentCanvasHost.HasNativeApplicationMenuActions(contextMenu) || !contextMenu.ApplicationActions.IsEmpty) &&
                 _propertiesDraft is null && _modelViewPropertiesDraft is null)
             {
                 <div id="@(contextMenu.Kind == DocumentCanvasContextMenuKind.Background
@@ -438,24 +507,24 @@
                                     @onclick="ExecuteDeletionContextActionAsync">@Text["Context_DeleteConnection"]</button>
                         }
                     }
-                    @if (contextMenu.ApplicationContext is { } applicationContext)
+                    @if (contextMenu.ApplicationContext is { } applicationContext && !contextMenu.ApplicationActions.IsEmpty)
                     {
-                        <div class="application-action-group" role="group" aria-labelledby="@DomId("application-actions-heading")">
-                            <div id="@DomId("application-actions-heading")" class="application-action-heading">@Text["Context_ApplicationActions"]</div>
-                            @if (contextMenu.IsApplicationDiscoveryPending)
-                            {
-                                <div role="status" class="application-action-status">@Text["Context_LoadingActions"]</div>
-                            }
+                        @if (DocumentCanvasHost.HasNativeApplicationMenuActions(contextMenu))
+                        {
+                            <div role="separator" class="application-action-separator"></div>
+                        }
+                        <div class="application-action-group" role="group" aria-label="@Text["Context_ApplicationActions"]">
                             @for (var index = 0; index < contextMenu.ApplicationActions.Length; index++)
                             {
                                 var action = contextMenu.ApplicationActions[index];
                                 var reasonId = DomId($"application-action-reason-{index}");
                                 <button @key="action.Id" type="button" role="menuitem"
                                         data-application-action-id="@action.Id"
-                                        aria-disabled="@(!action.IsEnabled ? "true" : "false")"
+                                        aria-label="@action.Label"
+                                        aria-disabled="@(!action.IsEnabled || _host?.IsApplicationActionRequestActionable(applicationContext.RequestVersion) != true ? "true" : "false")"
                                         aria-describedby="@(action.IsEnabled || string.IsNullOrWhiteSpace(action.DisabledExplanation) ? null : reasonId)"
                                         @onclick="() => ExecuteApplicationMenuActionAsync(applicationContext.RequestVersion, action.Id)">
-                                    <span>@action.Label</span>
+                                    <span class="application-action-label">@RenderApplicationActionIcon(action.Icon)<span>@action.Label</span></span>
                                     @if (!action.IsEnabled && !string.IsNullOrWhiteSpace(action.DisabledExplanation))
                                     {
                                         <span id="@reasonId" class="application-action-explanation">@action.DisabledExplanation</span>
@@ -863,11 +932,19 @@
 
     private string StatusValue => _state switch
     {
+        _ when IsSurfacePresentationPending => "rendering",
         { Session.Status: EditingSessionStatus.Ready, LatestPresentationSucceeded: false } =>
             "renderfaulted",
         { InitializationAttempted: true, IsInitialized: false } => "initializationfaulted",
         _ => SceneStatusValue,
     };
+
+    // Resize invalidates the acknowledged frame before its replacement is rendered.
+    // Keep genuine host/render errors visible, including during a pending retry.
+    private bool IsSurfacePresentationPending =>
+        _state is { Session.Status: EditingSessionStatus.Ready, SurfaceRenderPending: true } &&
+        !_state.HostDiagnostics.Any(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error) &&
+        !_state.Session.PresentationDiagnostics.Any(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
 
     private string SceneRevision =>
         (_state?.Session?.CurrentScene ?? _state?.Session?.LastKnownGoodScene)
@@ -1186,6 +1263,7 @@
     private string StatusMessage => ConnectionGuidance ?? _state switch
     {
         { IsDisposed: true } or { Session.IsClosed: true } => Text["Status_Disposed"],
+        _ when IsSurfacePresentationPending => Text["Status_Preparing"],
         { Session.Status: EditingSessionStatus.Ready, LatestPresentationSucceeded: true }
             when _state.Session.EditorState.TemporaryFeedback.FirstOrDefault(static feedback => feedback.SpatialResize is not null)?.SpatialResize is { } resize =>
             Text[resize.IsAllowed ? "Status_RegionResizeAllowed" : "Status_RegionResizeRejected",
@@ -1215,7 +1293,8 @@
         (_state?.HostDiagnostics ?? [])
         .Concat(_state?.InteractionDiagnostics ?? [])
         .Concat(_state?.Session?.RuntimeDiagnostics ?? [])
-        .Concat(_state?.Session?.PresentationDiagnostics ?? []);
+        .Concat(_state?.Session?.PresentationDiagnostics ?? [])
+        .Concat(_state?.Session?.DecorationDiagnostics ?? []);
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -1254,6 +1333,7 @@
                     }
 
                     _state = host.CaptureState();
+                    CaptureApplicationToolbar(host);
                 }
 
                 StateHasChanged();
@@ -1262,6 +1342,7 @@
 
         await FocusNewDiagramConfirmationAsync();
         await UpdateApplicationMenuFocusAsync();
+        await UpdateApplicationToolbarPresentationAsync();
         if (_editColoursFocusPending && _modelViewPropertiesDraft is { ColourEditor: null })
         {
             _editColoursFocusPending = false;
@@ -1270,7 +1351,32 @@
 
     }
 
-    public async ValueTask DisposeAsync()
+    private BpmnLifecycleObservation? _lifecycleObservation;
+
+    internal BpmnApplicationActionObservation? BeginApplicationActionObservation() =>
+        _disposed ? null : _host?.BeginApplicationActionObservation();
+
+    internal BpmnLifecycleObservation? BeginLifecycleObservation() =>
+        _disposed ? null : _lifecycleObservation = _host?.BeginLifecycleObservation();
+
+    public ValueTask DisposeAsync()
+    {
+        var observation = _lifecycleObservation?.Evidence;
+        observation?.ComponentDisposalEntered();
+        var attempt = observation is null ? null : new DisposalObservationAttempt();
+        var disposal = DisposeCoreAsync(attempt);
+        if (observation is null || attempt?.OwnsCleanup != true) return disposal;
+        var task = disposal.AsTask();
+        observation.TrackComponentDisposal(task);
+        return new ValueTask(task);
+    }
+
+    private sealed class DisposalObservationAttempt
+    {
+        internal bool OwnsCleanup { get; set; }
+    }
+
+    private async ValueTask DisposeCoreAsync(DisposalObservationAttempt? observationAttempt)
     {
         DocumentCanvasHost? host;
         lock (_lifecycleSync)
@@ -1281,9 +1387,12 @@
             }
 
             _disposed = true;
+            if (observationAttempt is not null) observationAttempt.OwnsCleanup = true;
             if (_settings is not null) _settings.Changed -= HandleGridChangedAsync;
             InvalidateActionBarPresentation();
+            _lifecycleObservation?.Evidence.Record("ComponentCancellationRequested");
             _componentLifetime.Cancel();
+            _lifecycleObservation?.Evidence.Record("ComponentCancellationReturned");
             _propertiesDraft = null;
             _modelViewPropertiesDraft = null;
             _newDiagramConfirmationOpen = false;
@@ -1300,10 +1409,13 @@
         if (host is not null)
         {
             await host.DisposeAsync();
+            _lifecycleObservation?.Evidence.Record("HostDisposed");
         }
 
         await DisposeApplicationMenuModuleAsync();
+        _lifecycleObservation?.Evidence.Record("MenuDisposed");
         _componentLifetime.Dispose();
+        _lifecycleObservation?.Evidence.Record("ComponentLifetimeDisposed");
     }
 
     private Task HandleHostStateChangedAsync(EditingSessionGeneration? pendingPanGeneration) => InvokeAsync(() =>
@@ -1316,6 +1428,7 @@
             }
 
             _state = _host.CaptureState();
+            CaptureApplicationToolbar(_host);
         }
 
         ReconcilePropertiesForm();
@@ -1329,7 +1442,7 @@
             session.Generation != generation ||
             _propertiesDraft is not null || _modelViewPropertiesDraft is not null ||
             _toolboxSelection.SelectedItemId is not null ||
-            _newDiagramConfirmationOpen || _newDiagramInProgress)
+            _newDiagramConfirmationOpen || _newDiagramInProgress || _applicationToolbarWasVisible)
         {
             StateHasChanged();
         }
@@ -2498,6 +2611,7 @@
             if (!_disposed && ReferenceEquals(_host, host))
             {
                 _state = captured ?? host.CaptureState();
+                CaptureApplicationToolbar(host);
             }
         }
 

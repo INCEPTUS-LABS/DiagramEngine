@@ -68,7 +68,11 @@ public sealed partial class EditingSession
             presentationContext: _presentationContext,
             presentationPlan: observedStatus == EditingSessionStatus.Ready ? observedArtifacts?.PresentationPlan : null,
             selectionOrder: ordered?.SelectionOrder ?? editorState.Selection,
-            accessMode: _accessMode);
+            accessMode: _accessMode,
+            decorationInputRevision: _decorationInputRevision,
+            decorationPresentation: observedStatus == EditingSessionStatus.Ready &&
+                ReferenceEquals(observedCurrent, _decorationBaseScene) ? _decorationPresentation : null,
+            decorationDiagnostics: _decorationDiagnostics);
     }
 
     private bool IsUnavailable(out EditingSessionState state)

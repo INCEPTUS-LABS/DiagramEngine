@@ -63,7 +63,9 @@ public sealed class PhaseN51IssuesPresentationArchitectureTests
     {
         var hostStyles = ReadProductionFile("Inceptus.DiagramEngine.Blazor", "Demo", "BpmnDemoHost.razor.css");
         var layoutStyles = ReadProductionFile("Inceptus.DiagramEngine.Blazor", "Demo", "DemoApplicationLayout.razor.css");
-        Assert.Contains("grid-template-rows: auto minmax(0, 1fr);", layoutStyles, StringComparison.Ordinal);
+        Assert.Contains("flex-direction: column;", layoutStyles, StringComparison.Ordinal);
+        Assert.Contains("height: 100dvh;", layoutStyles, StringComparison.Ordinal);
+        Assert.Contains("flex: 1 1 0;", layoutStyles, StringComparison.Ordinal);
         Assert.Contains("position: absolute", Between(hostStyles, ".operation-feedback-panel {", "}"), StringComparison.Ordinal);
         Assert.Contains("overflow: auto", Between(hostStyles, ".operation-feedback-body {", "}"), StringComparison.Ordinal);
         var editor = ReadProductionFile("Inceptus.DiagramEngine.Bpmn.Blazor", "Components", "DocumentCanvas.razor");

@@ -1,0 +1,91 @@
+@namespace Inceptus.DiagramEngine.Blazor.Demo
+@using Microsoft.AspNetCore.Components.Web
+@implements IDisposable
+
+<details class="demo-annotations demo-verification" @onpointerdown:stopPropagation @onwheel:stopPropagation>
+    <summary>Lifecycle verification</summary>
+    <label><input type="checkbox" data-verification-action="enable" @bind="_enabled" /> Enable verification controls</label>
+    @if (_enabled)
+    {
+        <p>Source operations use the public modeler API. Captures are sampled; an awaited update result acknowledges that submission only.
+            Unmount controls also arm an internal, opt-in lifecycle receipt. Read it after unmount; observation does not force pending work.</p>
+        <p>Demo mount @MountGeneration · @MountId · mounted: @Mounted · retired application callbacks ignored: @RetiredCallbackCount.</p>
+        <div class="annotation-actions">
+            <button type="button" data-verification-action="capture" disabled="@(!CanOperate)" @onclick="CaptureCurrent">Capture current state</button>
+            @if (AllowReplacement)
+            {
+                <button type="button" data-verification-action="replace-identical" disabled="@(!CanOperate)" @onclick="ReplaceIdenticalAsync">Replace identical source</button>
+                <button type="button" data-verification-action="replace-cancelled" disabled="@(!CanOperate)" @onclick="ReplaceCancelledAsync">Replace with cancelled token</button>
+                <button type="button" data-verification-action="replace-incompatible" disabled="@(!CanOperate)" @onclick="ReplaceIncompatibleAsync">Try incompatible saved routing</button>
+            }
+            @if (AllowDecorations)
+            {
+                <button type="button" data-verification-action="stale-handle" disabled="@(!CanCheckRetiredAttachment)" @onclick="CheckRetiredAttachmentAsync">Check retired handle</button>
+            }
+            <button type="button" data-verification-action="unmount" disabled="@(!CanOperate)" @onclick="UnmountAsync">Unmount modeler</button>
+            @if (AllowDecorations)
+            {
+                <button type="button" data-verification-action="update-unmount" disabled="@(!CanOperate)" @onclick="UpdateAndUnmountAsync">Update and request unmount</button>
+            }
+            <button type="button" data-verification-action="mount" disabled="@(_busy || Mounted || _disposed)" @onclick="MountAsync">Mount modeler</button>
+            <button type="button" data-verification-action="read-lifecycle" disabled="@(_lifecycleObservation is null || _disposed)" @onclick="ReadLifecycleObservations">Read lifecycle observations</button>
+        </div>
+        <p role="status" data-verification-status="@Status">@Feedback</p>
+        @if (LifecycleSnapshot is { } lifecycle)
+        {
+            <div data-lifecycle-observation="@lifecycle.Id">
+                <p>Observed instance @lifecycle.Attachment.InstanceId · attachment @lifecycle.Attachment.AttachmentVersion · input @lifecycle.InputRevision.</p>
+                <p>Actual child disposal task: @(lifecycle.DisposalStatus ?? "not observed") · completion chain observed: @lifecycle.CompletionChainObserved.</p>
+                <p>At actual child entry: accepted @lifecycle.AcceptedAtEntry · same task incomplete @lifecycle.PendingAtEntry · accepted-pending observed: @lifecycle.AcceptedPendingAtEntryObserved.</p>
+                <p>Update task: @(lifecycle.OperationStatus ?? "not tracked") · evidence overflow @lifecycle.Overflow · invalid correlation @lifecycle.Invalid.</p>
+                <ol>
+                    @foreach (var observation in lifecycle.Events)
+                    {
+                        <li>@observation.Sequence · @observation.Timestamp · @observation.Stage · @observation.Detail · failure: @observation.Failure</li>
+                    }
+                </ol>
+                <p>Completion timestamps are readback times. Pending-at-entry requires the same accepted task; completed-before-entry leaves that case open.
+                    Callback retirement does not establish termination of arbitrary consumer handlers or all image decoding.</p>
+            </div>
+        }
+        @if (SnapshotBefore is { } before)
+        {
+            <p data-verification-snapshot="before">Before (sampled): @Describe(before)</p>
+        }
+        @if (SnapshotAfter is { } after)
+        {
+            <p data-verification-snapshot="after">After (sampled): @Describe(after)</p>
+        }
+        @if (SameComponent is { } same)
+        {
+            <p>Same modeler reference after source operation: @same.</p>
+        }
+        @if (DocumentResult is { } documentResult)
+        {
+            <p data-verification-document-result="@documentResult.Status">Document result: @documentResult.Status.
+                @foreach (var diagnostic in documentResult.Diagnostics)
+                {
+                    <span>@diagnostic.Code: @diagnostic.Message </span>
+                }
+            </p>
+        }
+        @if (DecorationResult is { } decorationResult)
+        {
+            <p data-verification-decoration-result="@decorationResult.Status">Awaited decoration result: revision @decorationResult.InputRevision ·
+                accepted: @decorationResult.Accepted · @decorationResult.Status ·
+                frame presented: @(decorationResult.Presentation?.FramePresented == true) ·
+                decorations included: @(decorationResult.Presentation?.DecorationsIncluded == true).</p>
+        }
+        @if (PendingAtUnmountRequest is { } pending)
+        {
+            <p>At unmount request: task incomplete: @pending · accepted input observed: @AcceptedAtUnmountRequest.
+                This does not establish that work remained pending at disposal entry.</p>
+        }
+        <p>Unmount requests normal Blazor removal. DOM removal, task completion and null capture do not establish completion of asynchronous managed disposal.
+            The Demo mount identity above is application-owned; inspect the existing native canvas IDs and active-canvas attribute separately in the browser.</p>
+        @if (AllowDecorations)
+        {
+            <p>After successful replacement or remount, use Annotation example → Update annotations to submit fresh revision 1.</p>
+        }
+    }
+</details>

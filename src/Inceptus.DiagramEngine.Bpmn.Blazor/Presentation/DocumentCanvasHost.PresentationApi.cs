@@ -30,9 +30,11 @@ internal sealed partial class DocumentCanvasHost : IBpmnDiagramPresentation
         {
             if (!_disposed)
             {
-                if (_contextMenu?.ApplicationContext is not null) CloseContextMenuUnderLock();
-                else RetireApplicationActionsUnderLock();
+                RetireApplicationActionsUnderLock();
+                if (_contextMenu?.ApplicationContext is not null) _contextMenu = null;
+                _lifecycleObservation?.Evidence.Record("ParentCancellationRequested");
                 _lifetime.Cancel();
+                _lifecycleObservation?.Evidence.Record("ParentCancellationReturned");
             }
         }
     }
@@ -112,8 +114,10 @@ internal sealed partial class DocumentCanvasHost : IBpmnDiagramPresentation
     private void CollectSelectionNotificationUnderLock()
     {
         var presentation = CapturePresentation();
-        // A temporarily rebuilding presentation is not a logical selection clearing.
-        if (!presentation.IsAvailable && _session?.CaptureState().Status == EditingSessionStatus.Rebuilding) return;
+        // A temporarily unavailable frame is not a logical selection clearing. The
+        // canonical session remains the selection authority through pan/surface rebuilds.
+        if (!presentation.IsAvailable && _session?.CaptureState() is { IsClosed: false } state &&
+            state.Status != EditingSessionStatus.RuntimeFaulted) return;
         var selection = presentation.IsAvailable ? _observedSelection : [];
         var semantic = presentation.IsAvailable ? _observedSemanticSelection : null;
         var primary = presentation.PrimaryPart?.SceneObjectId;

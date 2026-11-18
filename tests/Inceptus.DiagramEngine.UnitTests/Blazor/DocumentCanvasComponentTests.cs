@@ -56,6 +56,7 @@ public sealed class DocumentCanvasComponentTests
         var jsRuntime = new RecordingJsRuntime();
         var services = new ServiceCollection()
             .AddLogging().AddInceptusBpmnModeler()
+            .AddSingleton(_ => new HttpClient { BaseAddress = new Uri("https://demo.invalid/") })
             .AddSingleton<IJSRuntime>(jsRuntime)
             .BuildServiceProvider();
         await using var renderer = new HtmlRenderer(services, NullLoggerFactory.Instance);
@@ -253,6 +254,11 @@ public sealed class DocumentCanvasComponentTests
             initial,
             "role=\"status\"",
             RegexOptions.CultureInvariant));
+        Assert.Single(Regex.Matches(initial,
+            "<div[^>]*class=\"canvas-presentation-status\"[^>]*role=\"status\"",
+            RegexOptions.CultureInvariant));
+        Assert.DoesNotContain("data-decoration-status", initial, StringComparison.Ordinal);
+        Assert.DoesNotContain("data-application-example-revision", initial, StringComparison.Ordinal);
         Assert.DoesNotContain("role=\"alert\"", initial, StringComparison.Ordinal);
         Assert.Equal(0, jsRuntime.InvocationCount);
     }

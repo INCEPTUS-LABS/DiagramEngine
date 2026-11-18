@@ -12,3 +12,5 @@ button.destructive { color: #dc2626; }
 .element-group-name { flex: 0 0 94px; font-size: 12px; font-weight: 600; }
 .element-candidates { display: flex; gap: 4px; overflow-x: auto; padding: 3px; scrollbar-width: thin; }
 .connector-actions button { flex-basis: 44px; width: 44px; height: 44px; }
+.element-actions.application-native-group { position: relative; padding: 0; border: 0; background: none; box-shadow: none; border-radius: 0; max-width: none; overflow: visible; flex: 0 0 auto; }
+.application-native-group button { flex-basis: 44px; width: 44px; height: 44px; }

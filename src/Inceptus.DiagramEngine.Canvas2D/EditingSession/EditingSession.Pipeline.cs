@@ -1209,7 +1209,8 @@ public sealed partial class EditingSession
 
         lock (_sync)
         {
-            if (ConnectionToolState.GetSelection(EditorState.CaptureSnapshot()) is not null ||
+            if (_decorationInput is not null ||
+                ConnectionToolState.GetSelection(EditorState.CaptureSnapshot()) is not null ||
                 _status != EditingSessionStatus.Ready ||
                 _currentScene is not { } currentScene ||
                 _artifacts is not { } artifacts ||
@@ -1269,7 +1270,8 @@ public sealed partial class EditingSession
         if (_presentationContext is DocumentPresentationContext ||
             change.PipelineInvalidation != PipelineInvalidation.Scene &&
             !(change.PipelineInvalidation == PipelineInvalidation.None &&
-                ConnectionToolState.GetSelection(EditorState.CaptureSnapshot()) is not null))
+                (ConnectionToolState.GetSelection(EditorState.CaptureSnapshot()) is not null ||
+                 _decorationInput is not null)))
         {
             return null;
         }

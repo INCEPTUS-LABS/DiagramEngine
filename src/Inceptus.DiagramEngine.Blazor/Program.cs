@@ -6,15 +6,16 @@ using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 
-var uiCulture = CultureInfo.GetCultureInfo("en");
+var builder = WebAssemblyHostBuilder.CreateDefault(args);
+builder.RootComponents.Add<App>("#app");
+builder.Services.AddInceptusBpmnModeler();
+builder.Services.AddScoped(_ => new HttpClient { BaseAddress = new Uri(builder.HostEnvironment.BaseAddress) });
+builder.Services.AddSingleton<IBpmnModelerStartupDocumentProvider>(BpmnPoolDemoStartupDocumentProvider.Instance);
+
+var host = builder.Build();
+var uiCulture = DemoUiCulture.Resolve(host.Services.GetRequiredService<NavigationManager>().Uri);
 CultureInfo.DefaultThreadCurrentCulture = CultureInfo.InvariantCulture;
 CultureInfo.DefaultThreadCurrentUICulture = uiCulture;
 CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
 CultureInfo.CurrentUICulture = uiCulture;
-
-var builder = WebAssemblyHostBuilder.CreateDefault(args);
-builder.RootComponents.Add<App>("#app");
-builder.Services.AddInceptusBpmnModeler();
-builder.Services.AddSingleton<IBpmnModelerStartupDocumentProvider>(BpmnPoolDemoStartupDocumentProvider.Instance);
-
-await builder.Build().RunAsync();
+await host.RunAsync();

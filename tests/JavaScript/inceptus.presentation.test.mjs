@@ -1571,3 +1571,72 @@ test("pointer observer rejects invalid construction/lifecycle and ignores nonfin
     observer.dispose();
     assert.throws(() => observer.start(), /disposed/);
 });
+
+
+test("application toolbar key boundaries preserve native activation and navigation never activates controls", async () => {
+    const { prepareApplicationToolbar, handleToolbarKey, focusToolbarMore } = await import(pathToFileURL(modulePath));
+    const lookup = document.getElementById;
+    const toolbar = new FakeElement(300, 52, 90, 80);
+    const buttons = [80, 120, 44].map(width => {
+        const button = new FakeElement(width, 44);
+        button.getClientRects = () => [{}];
+        button.closest = () => null;
+        button.focus = () => { document.activeElement = button; };
+        button.click = () => { throw new Error("Toolbar navigation must not activate"); };
+        return button;
+    });
+    const creation = new FakeElement(44, 44);
+    creation.getClientRects = () => [{}];
+    creation.closest = selector => selector === ".element-creation" ? toolbar : null;
+    toolbar.querySelectorAll = () => [...buttons, creation];
+    toolbar.querySelector = () => buttons[2];
+    document.getElementById = id => id === "toolbar" ? toolbar : lookup(id);
+    try {
+        assert.equal(prepareApplicationToolbar("toolbar"), true);
+        prepareApplicationToolbar("toolbar");
+        assert.equal(toolbar.listeners.get("keydown").length, 1);
+        let prevented = 0;
+        for (const key of ["ArrowLeft", "ArrowRight", "Home", "End", "Tab", "Enter", " "])
+            toolbar.dispatch("keydown", { key, preventDefault() { prevented++; } });
+        assert.equal(prevented, 4); // Activation and Tab retain their native button behavior.
+        document.activeElement = buttons[0];
+        assert.equal(handleToolbarKey("toolbar", "ArrowRight"), true);
+        assert.equal(document.activeElement, buttons[1]);
+        handleToolbarKey("toolbar", "End");
+        assert.equal(document.activeElement, buttons[2]);
+        handleToolbarKey("toolbar", "ArrowRight");
+        assert.equal(document.activeElement, buttons[0]);
+        handleToolbarKey("toolbar", "ArrowLeft");
+        assert.equal(document.activeElement, buttons[2]);
+        handleToolbarKey("toolbar", "Home");
+        assert.equal(document.activeElement, buttons[0]);
+        assert.equal(handleToolbarKey("toolbar", "Enter"), false);
+        assert.equal(handleToolbarKey("toolbar", " "), false);
+        assert.equal(handleToolbarKey("toolbar", "Tab"), false);
+        assert.equal(focusToolbarMore("toolbar"), true);
+        assert.equal(document.activeElement, buttons[2]);
+        assert.equal(prepareApplicationToolbar("missing"), false);
+        assert.equal(handleToolbarKey("missing", "End"), false);
+    } finally { document.getElementById = lookup; delete document.activeElement; }
+});
+
+test("toolbar overflow fits the actual surface inset and keeps disabled explanations focusable", async () => {
+    const { focusToolbarOverflow } = await import(pathToFileURL(modulePath));
+    const lookup = document.getElementById;
+    const surface = new FakeElement(320, 240, 10, 20);
+    const toolbar = new FakeElement(150, 52, 170, 180);
+    const menu = new FakeElement(240, 180, 170, 240);
+    menu.parentElement = toolbar;
+    const first = { disabled: false, getClientRects: () => [{}], focus() { document.activeElement = first; } };
+    menu.querySelectorAll = () => [first];
+    document.getElementById = id => id === "overflow" ? menu : id === "surface" ? surface : lookup(id);
+    try {
+        assert.equal(focusToolbarOverflow("overflow", "surface"), true);
+        assert.equal(menu.style.maxWidth, "304px");
+        assert.equal(menu.style.maxHeight, "224px");
+        assert.equal(menu.style.left, "-88px");
+        assert.equal(menu.style.top, "-108px");
+        assert.equal(document.activeElement, first);
+        assert.equal(focusToolbarOverflow("missing", "surface"), false);
+    } finally { document.getElementById = lookup; delete document.activeElement; }
+});

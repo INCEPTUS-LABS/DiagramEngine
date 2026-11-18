@@ -17,7 +17,8 @@ internal sealed class Canvas2DRenderFrame
         long presentationVersion,
         Canvas2DViewportLine[]? viewportLines = null,
         Canvas2DBoundedRenderItem[]? presentationItems = null,
-        Canvas2DPointPattern? backgroundPoints = null)
+        Canvas2DPointPattern? backgroundPoints = null,
+        Canvas2DDecorationFrameResources? decorationResources = null)
     {
         ViewportTransform = Canvas2DMatrixData.From(viewportTransform);
         Items = items;
@@ -26,6 +27,7 @@ internal sealed class Canvas2DRenderFrame
         ViewportLines = viewportLines ?? [];
         PresentationItems = presentationItems ?? [];
         BackgroundPoints = backgroundPoints;
+        DecorationResources = decorationResources;
     }
 
     public Canvas2DMatrixData ViewportTransform { get; }
@@ -41,6 +43,8 @@ internal sealed class Canvas2DRenderFrame
     public Canvas2DBoundedRenderItem[] PresentationItems { get; }
 
     public Canvas2DPointPattern? BackgroundPoints { get; }
+
+    public Canvas2DDecorationFrameResources? DecorationResources { get; }
 }
 
 /// <summary>

@@ -23,7 +23,7 @@ public sealed partial class DocumentCanvasHostTests
     [Fact]
     public async Task Stage5DemoKeepsLogicalPresentationDuringAnUnpresentedHoverFrame()
     {
-        await using var fixture = await ReadOnlyDemoFixture.CreateAsync();
+        await using var fixture = await ReadOnlyDemoFixture.CreateAsync(nativeInformation: true);
         var modeler = fixture.Renderer.Modeler;
         var session = Session(fixture.Host);
         Assert.True((await modeler.SelectVisualAsync(modeler.CapturePresentation().Stamp!, BpmnDemoPipeline.TaskVisualId)).Succeeded);
@@ -43,6 +43,9 @@ public sealed partial class DocumentCanvasHostTests
             Assert.False(modeler.CapturePresentation().IsAvailable);
             fixture.Demo.RefreshPresentation();
             Assert.Same(coherent, fixture.Demo.Presentation);
+            Assert.NotNull(fixture.Demo.InformationDocument);
+            Assert.Single(fixture.Demo.InformationTargets);
+            Assert.Empty(fixture.OperationFailures);
         }
         finally
         {
@@ -59,7 +62,7 @@ public sealed partial class DocumentCanvasHostTests
     }
 
     [Fact]
-    public async Task ReadOnlyDemoCompilesOneSettingsActionAndReadOnlyPresentationCallbacks()
+    public async Task ReadOnlyDemoCompilesSettingsGraphicalExportAndReadOnlyPresentationCallbacks()
     {
         using var demo = new ReadOnlyBpmnDemoHost();
         await using var services = new ServiceCollection().AddLogging().AddInceptusBpmnModeler().BuildServiceProvider();
@@ -80,7 +83,7 @@ public sealed partial class DocumentCanvasHostTests
         var frames = contentRange.Array.Take(contentRange.Count).ToArray();
         var attributes = frames.Where(frame => frame.FrameType == RenderTreeFrameType.Attribute).ToArray();
         Assert.DoesNotContain(attributes, attribute => attribute.AttributeName.StartsWith('@'));
-        Assert.Single(attributes, attribute => attribute.AttributeName == "onclick" && attribute.AttributeValue is not string);
+        Assert.Equal(3, attributes.Count(attribute => attribute.AttributeName == "onclick" && attribute.AttributeValue is not string));
         Assert.DoesNotContain(attributes, attribute => attribute.AttributeName == "onchange");
         Assert.Single(frames, frame => frame.FrameType == RenderTreeFrameType.Component && frame.ComponentType == typeof(InceptusBpmnModeler));
         Assert.Equal(EditingSessionAccessMode.ReadOnly,
@@ -186,12 +189,14 @@ public sealed partial class DocumentCanvasHostTests
         internal RecordingRenderExecution Execution { get; }
         internal ReadOnlyBpmnDemoHost Demo { get; } = new();
         internal ConcurrentQueue<BpmnModelerDocumentChangedEventArgs> DocumentChanges { get; } = new();
+        internal ConcurrentQueue<BpmnModelerOperationFailedEventArgs> OperationFailures { get; } = new();
 
         private ReadOnlyDemoFixture(ServiceProvider services, ApplicationComponentRenderer renderer, DocumentCanvasHost host,
             RecordingRenderExecution execution)
         { _services = services; Renderer = renderer; Host = host; Execution = execution; }
 
-        internal static async Task<ReadOnlyDemoFixture> CreateAsync()
+        internal static async Task<ReadOnlyDemoFixture> CreateAsync(EditingSessionAccessMode mode = EditingSessionAccessMode.ReadOnly,
+            RecordingRenderExecution? replacementExecution = null, bool nativeInformation = false)
         {
             var prepared = await BpmnModelerTestComposition.CreateFreshDemoFactoryAsync();
             var source = (await prepared.CreateAsync()).Document.CaptureSnapshot();
@@ -202,22 +207,38 @@ public sealed partial class DocumentCanvasHostTests
             await renderer.InitializeAsync(ParameterView.FromDictionary(new Dictionary<string, object?>
             {
                 [nameof(InceptusBpmnModeler.InitialDocument)] = source,
-                [nameof(InceptusBpmnModeler.AccessMode)] = EditingSessionAccessMode.ReadOnly,
+                [nameof(InceptusBpmnModeler.AccessMode)] = mode,
+                [nameof(InceptusBpmnModeler.OperationFailed)] = EventCallback.Factory.Create<BpmnModelerOperationFailedEventArgs>(
+                    new object(), args => fixture!.OperationFailures.Enqueue(args)),
                 [nameof(InceptusBpmnModeler.ApplicationActionProvider)] = (BpmnApplicationActionProvider)ReadOnlyBpmnDemoHost.DiscoverActionsAsync,
                 [nameof(InceptusBpmnModeler.ApplicationActionInvoked)] = EventCallback.Factory.Create<BpmnApplicationActionInvocationEventArgs>(
                     new object(), args => fixture!.Demo.InspectAsync(args)),
                 [nameof(InceptusBpmnModeler.DocumentChanged)] = EventCallback.Factory.Create<BpmnModelerDocumentChangedEventArgs>(
-                    new object(), args => fixture!.DocumentChanges.Enqueue(args)),
+                    new object(), args =>
+                    {
+                        fixture!.DocumentChanges.Enqueue(args);
+                        if (nativeInformation) typeof(ReadOnlyBpmnDemoHost).GetMethod("OnDocumentChanged", PropertiesUxFlags)!.Invoke(fixture.Demo, [args]);
+                    }),
+                [nameof(InceptusBpmnModeler.SelectionChanged)] = EventCallback.Factory.Create<BpmnSelectionChangedEventArgs>(
+                    new object(), args =>
+                    {
+                        if (nativeInformation) typeof(ReadOnlyBpmnDemoHost).GetMethod("OnSelectionChanged", PropertiesUxFlags)!.Invoke(fixture!.Demo, [args]);
+                    }),
+                [nameof(InceptusBpmnModeler.ViewChanged)] = EventCallback.Factory.Create(new object(), () =>
+                {
+                    if (nativeInformation) fixture!.Demo.RefreshPresentation();
+                }),
             }));
             var facade = Assert.IsType<BpmnModelerFacade>(typeof(InceptusBpmnModeler)
                 .GetField("_facade", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(renderer.Modeler));
             var execution = new RecordingRenderExecution();
             var host = CreateHost(execution, new RecordingSurfaceObserver(new Canvas2DSurfaceSize(1600, 1000, 1)),
-                compositionFactory: facade.CompositionFactory, replacementRendererFactory: () => CreateRenderer(new RecordingRenderExecution()));
+                compositionFactory: facade.CompositionFactory, replacementRendererFactory: () => CreateRenderer(replacementExecution ?? new RecordingRenderExecution()));
             fixture = new(services, renderer, host, execution);
             fixture.Demo.Modeler = renderer.Modeler;
             facade.Attach(host);
             await host.InitializeAsync("stage5-demo-active", "stage5-demo-standby", "stage5-demo-container");
+            if (nativeInformation) typeof(ReadOnlyBpmnDemoHost).GetMethod("OnReady", PropertiesUxFlags)!.Invoke(fixture.Demo, [new BpmnModelerReadyEventArgs(renderer.Modeler.GetDocument().Snapshot!)]);
             fixture.Demo.RefreshPresentation();
             return fixture;
         }

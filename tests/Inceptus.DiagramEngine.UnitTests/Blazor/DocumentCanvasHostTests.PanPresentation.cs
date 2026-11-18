@@ -381,18 +381,20 @@ public sealed partial class DocumentCanvasHostTests
         private HtmlRootComponent _rendered;
 
         internal static async Task<PanComponentFixture> CreateAsync(bool invariantContributors = true,
-            DocumentSnapshot? document = null, Inceptus.DiagramEngine.Contracts.EditorState.IGridSettingsSource? gridSettings = null)
+            DocumentSnapshot? document = null, Inceptus.DiagramEngine.Contracts.EditorState.IGridSettingsSource? gridSettings = null,
+            IDocumentCanvasCompositionFactory? compositionFactory = null)
         {
             var test = new PanComponentFixture();
             test.Host = CreateHost(test.Execution, test.Surface,
-                compositionFactory: document is not null ? new BpmnModelerCompositionFactory(initialDocument: document) :
-                    invariantContributors ? BpmnModelerTestComposition.DemoFactory : null,
+                compositionFactory: compositionFactory ?? (document is not null ? new BpmnModelerCompositionFactory(initialDocument: document) :
+                    invariantContributors ? BpmnModelerTestComposition.DemoFactory : null),
                 toolboxSelection: test.Selection,
                 replacementRendererFactory: () => CreateRenderer(new RecordingRenderExecution()), gridSettings: gridSettings);
             await test.Host.InitializeAsync("active", "standby", "container");
             await PointerObserver(test.Host).WheelAsync(500, 500);
             test.Activator = new PanComponentActivator(test.Host, test.Selection);
             test._services = new ServiceCollection().AddLogging().AddInceptusBpmnModeler()
+                .AddSingleton(_ => new HttpClient { BaseAddress = new Uri("https://demo.invalid/") })
                 .AddSingleton<IJSRuntime>(new PublishDownloadRuntime())
                 .AddSingleton<IComponentActivator>(test.Activator).BuildServiceProvider();
             test.Renderer = new HtmlRenderer(test._services, NullLoggerFactory.Instance);

@@ -145,6 +145,10 @@ class Renderer {
     #defaultFontFamily;
     #imageUris = new Map();
     #images = new Map();
+    #decorationImages = new Map();
+    #decorationAttachment = null;
+    #decorationPreparation = null;
+    #cancelledDecorationContentVersion = 0;
     #fontFaces = [];
     #fontAliases = new Map();
     #ownsCanvas = false;
@@ -245,6 +249,10 @@ class Renderer {
         }
 
         this.#operationEpoch++;
+        this.#decorationPreparation?.cancel();
+        this.#releaseDecorationEntries(this.#decorationImages);
+        this.#decorationImages = new Map();
+        this.#decorationAttachment = null;
         this.#content = null;
         this.#contentBounds = null;
         this.#presentationItems = [];
@@ -269,6 +277,7 @@ class Renderer {
         if (!this.#initialized || !validPresentation(frame) || !validPointPattern(frame.backgroundPoints) || !Array.isArray(frame.items) ||
             !validViewportLines(frame.viewportLines, frame.items.length) ||
             !validPresentationItems(frame.presentationItems, frame.items.length) ||
+            !validDecorationResources(frame.decorationResources, this.#imageUris) ||
             frame.contentVersion <= this.#contentVersion ||
             frame.presentationVersion <= this.#presentationVersion) {
             return failure("CANVAS2D_RENDERER_RENDERING_FAILED", "Canvas2DRenderFrame");
@@ -279,6 +288,7 @@ class Renderer {
         this.#contentVersion = frame.contentVersion;
         this.#presentationVersion = frame.presentationVersion;
         const epoch = ++this.#operationEpoch;
+        this.#decorationPreparation?.cancel();
         this.#contentReady = false;
         if (!frame.items.every(validItemPaint)) {
             return failure("CANVAS2D_RENDERER_RENDERING_FAILED", "Canvas2DSceneStyle");
@@ -289,18 +299,25 @@ class Renderer {
             return failure("CANVAS2D_RENDERER_RESIZE_FAILED", "Canvas2DSurfaceSize");
         }
 
-        const resources = await this.#loadRequiredImages(frame.presentationItems?.length
-            ? frame.items.concat(frame.presentationItems.map(entry => entry.item)) : frame.items);
-        if (this.#disposed || epoch !== this.#operationEpoch) {
+        const items = frame.presentationItems?.length
+            ? frame.items.concat(frame.presentationItems.map(entry => entry.item)) : frame.items;
+        const prepared = await this.#prepareImages(items, frame.decorationResources, epoch, frame.contentVersion);
+        if (this.#disposed || epoch !== this.#operationEpoch ||
+            (frame.decorationResources && frame.contentVersion <= this.#cancelledDecorationContentVersion)) {
+            this.#releaseDecorationEntries(prepared.images, new Set(this.#decorationImages.values()));
             return failure("CANVAS2D_RENDERER_RENDERING_FAILED", "Canvas2DRenderFrame");
         }
-        if (!resources.succeeded) {
-            return resources;
+        if (!prepared.result.succeeded) {
+            return prepared.result;
         }
 
         // Validation and resources complete before replacing the one complete drawing set.
         // There is no asynchronous boundary between installation and drawing.
         const bounds = frame.items.map(conservativeItemBounds);
+        const installed = prepared.images;
+        this.#releaseDecorationEntries(this.#decorationImages, new Set(installed.values()));
+        this.#decorationImages = installed;
+        this.#decorationAttachment = frame.decorationResources?.attachmentId ?? null;
         this.#content = frame.items;
         this.#contentBounds = bounds;
         this.#presentationItems = frame.presentationItems ?? [];
@@ -330,7 +347,8 @@ class Renderer {
         }
         // Bounded requests may only use image resources already installed by a full frame.
         if (frame.presentationItems?.some(entry => entry.item.isVisible &&
-            entry.item.geometryKind === 4 && !this.#images.has(entry.item.content))) {
+            entry.item.geometryKind === 4 && !this.#images.has(entry.item.content) &&
+            !this.#decorationImages.has(entry.item.content))) {
             this.#contentReady = false;
             return failure("CANVAS2D_RENDERER_RENDERING_FAILED", "Canvas2DRenderFrame");
         }
@@ -519,6 +537,10 @@ class Renderer {
         }
         this.#disposed = true;
         this.#operationEpoch++;
+        this.#decorationPreparation?.cancel();
+        this.#releaseDecorationEntries(this.#decorationImages);
+        this.#decorationImages = new Map();
+        this.#decorationAttachment = null;
         this.#content = null;
         this.#contentBounds = null;
         this.#contentReady = false;
@@ -656,7 +678,7 @@ class Renderer {
     }
 
     #drawImage(item) {
-        const image = this.#images.get(item.content);
+        const image = this.#images.get(item.content) ?? this.#decorationImages.get(item.content)?.image;
         if (!image) {
             throw new Error("Image resource was not preloaded.");
         }
@@ -664,7 +686,122 @@ class Renderer {
         this.#context.drawImage(image, bounds.x, bounds.y, bounds.width, bounds.height);
     }
 
-    async #loadRequiredImages(items) {
+    // Called by the managed owner lifetime, never by the application caller after acceptance.
+    // Remember one monotonic version so cancellation arriving before render dispatch is effective.
+    cancelDecorationPreparation(contentVersion) {
+        if (!Number.isSafeInteger(contentVersion) || contentVersion <= 0) return;
+        this.#cancelledDecorationContentVersion = Math.max(this.#cancelledDecorationContentVersion, contentVersion);
+        if (this.#decorationPreparation?.contentVersion <= contentVersion) {
+            this.#decorationPreparation.cancel();
+        }
+    }
+
+    async #prepareImages(items, catalog, epoch, contentVersion) {
+        if (!catalog) {
+            return { result: await this.#loadRequiredImages(items, epoch), images: new Map() };
+        }
+        if (contentVersion <= this.#cancelledDecorationContentVersion) {
+            return { result: failure("CANVAS2D_RENDERER_RENDERING_FAILED", "Canvas2DRenderFrame"), images: new Map() };
+        }
+        const images = new Map();
+        const descriptors = new Map(catalog.images.map(resource => [resource.reference, resource]));
+        const references = [...new Set(items.filter(item => item.isVisible && item.geometryKind === 4)
+            .map(item => item.content))].sort();
+        const preparation = { contentVersion, retired: false, cancel: null, cancelWait: null };
+        let phase = "native";
+        let timeout;
+        const result = await new Promise(resolve => {
+            const finish = result => {
+                if (preparation.retired) return;
+                preparation.retired = true;
+                clearTimeout(timeout);
+                preparation.cancelWait?.();
+                preparation.cancelWait = null;
+                if (this.#decorationPreparation === preparation) this.#decorationPreparation = null;
+                if (!result.succeeded) {
+                    this.#releaseDecorationEntries(images, new Set(this.#decorationImages.values()));
+                    images.clear();
+                    descriptors.clear();
+                }
+                resolve({ result, images: result.succeeded ? images : new Map() });
+            };
+            const wait = async operation => {
+                let cancelWait;
+                const retired = new Promise((resolve, reject) => {
+                    cancelWait = () => reject(new Error("Canvas2D decoration preparation retired."));
+                    preparation.cancelWait = cancelWait;
+                });
+                try {
+                    // Promise.race consumes eventual native rejection, while retirement lets
+                    // the worker release its catalog/scene closures without awaiting that promise.
+                    return await Promise.race([operation, retired]);
+                } finally {
+                    if (preparation.cancelWait === cancelWait) preparation.cancelWait = null;
+                }
+            };
+            preparation.cancel = () => finish(failure("CANVAS2D_RENDERER_RENDERING_FAILED", "Canvas2DRenderFrame"));
+            this.#decorationPreparation = preparation;
+            // One deadline for the complete preparation, never a new deadline per image.
+            // A native-resource failure retains its existing graphics-failure classification.
+            timeout = setTimeout(() => finish(failure(phase === "decoration"
+                ? "CANVAS2D_DECORATION_RESOURCE_TIMEOUT" : "CANVAS2D_RENDERER_RENDERING_FAILED",
+                "Canvas2DDecorationResources")), 10000);
+            const prepare = async () => {
+                const nativeResult = await wait(this.#loadRequiredImages(items.filter(item => !descriptors.has(item.content)), epoch));
+                if (preparation.retired) return;
+                if (!nativeResult.succeeded) { finish(nativeResult); return; }
+                phase = "decoration";
+                try {
+                    for (const reference of references) {
+                        const descriptor = descriptors.get(reference);
+                        if (!descriptor) continue;
+                        let entry = [...images.values()].find(value => value.identity === descriptor.contentIdentity &&
+                            value.content === descriptor.svgContent);
+                        if (!entry && this.#decorationAttachment === catalog.attachmentId) {
+                            entry = [...this.#decorationImages.values()].find(value => value.identity === descriptor.contentIdentity &&
+                                value.content === descriptor.svgContent && !value.revoked);
+                        }
+                        if (!entry) {
+                            const image = new Image();
+                            const url = URL.createObjectURL(new Blob([descriptor.svgContent], { type: "image/svg+xml" }));
+                            entry = { identity: descriptor.contentIdentity, content: descriptor.svgContent,
+                                url, image, revoked: false };
+                            images.set(reference, entry);
+                            entry.image.decoding = "async";
+                            entry.image.src = url;
+                            // The native promise may remain pending. Its owned wrapper above settles;
+                            // late completion cannot install resources, draw, or restart the deadline.
+                            await wait(entry.image.decode());
+                            if (preparation.retired || this.#disposed || epoch !== this.#operationEpoch) return;
+                        }
+                        images.set(reference, entry);
+                    }
+                    finish(success());
+                } catch {
+                    finish(failure("CANVAS2D_DECORATION_IMAGE_LOAD_FAILED", "Canvas2DDecorationResources"));
+                }
+            };
+            // Both native and SVG decode rejection are observed, including after retirement.
+            prepare().catch(() => finish(failure("CANVAS2D_RENDERER_RENDERING_FAILED", "Canvas2DRenderFrame")));
+        });
+        return result;
+    }
+
+    #releaseDecorationEntries(images, retained = new Set()) {
+        for (const entry of new Set(images.values())) {
+            if (!retained.has(entry) && !entry.revoked) {
+                entry.revoked = true;
+                URL.revokeObjectURL(entry.url);
+                // Best-effort browser decode abandonment; correctness never relies on it
+                // settling Image.decode(). The owned wait has already been retired.
+                try { entry.image.src = ""; } catch { /* Browser resource cleanup is best effort. */ }
+                entry.image = null;
+                entry.content = null;
+            }
+        }
+    }
+
+    async #loadRequiredImages(items, epoch) {
         const references = [...new Set(items
             .filter(item => item.isVisible && item.geometryKind === 4)
             .map(item => item.content))]
@@ -682,8 +819,8 @@ class Renderer {
                 image.decoding = "async";
                 image.src = uri;
                 await image.decode();
-                if (this.#disposed) {
-                    return failure("CANVAS2D_RENDERER_DISPOSED", "Canvas2DRenderer");
+                if (this.#disposed || epoch !== this.#operationEpoch) {
+                    return failure("CANVAS2D_RENDERER_RENDERING_FAILED", "Canvas2DRenderFrame");
                 }
                 this.#images.set(reference, image);
             } catch {
@@ -692,6 +829,25 @@ class Renderer {
         }
         return success();
     }
+}
+
+function validDecorationResources(catalog, nativeResources) {
+    if (catalog == null) return true;
+    if (typeof catalog.attachmentId !== "string" || !catalog.attachmentId ||
+        !Number.isSafeInteger(catalog.inputRevision) || catalog.inputRevision < 0 ||
+        typeof catalog.identity !== "string" || !catalog.identity ||
+        !Array.isArray(catalog.images) || catalog.images.length > 64) return false;
+    const references = new Set();
+    let length = 0;
+    return catalog.images.every(resource => {
+        if (!resource || typeof resource.reference !== "string" || !resource.reference ||
+            references.has(resource.reference) || nativeResources.has(resource.reference) ||
+            typeof resource.contentIdentity !== "string" || !/^[0-9A-F]{64}$/.test(resource.contentIdentity) ||
+            typeof resource.svgContent !== "string" || !resource.svgContent || resource.svgContent.length > 262144) return false;
+        references.add(resource.reference);
+        length += resource.svgContent.length;
+        return length <= 2097152;
+    });
 }
 
 function validPresentationItems(items, contentLength) {

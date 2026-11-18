@@ -5715,6 +5715,8 @@ public sealed partial class DocumentCanvasHostTests
 
     private sealed class RecordingSurfaceObserver : ICanvasPresentationSurfaceObserver
     {
+        internal Exception? DisposeException { get; set; }
+        internal Action? Disposing { get; set; }
         private readonly Canvas2DSurfaceSize _initial;
         private readonly List<string>? _lifecycle;
 
@@ -5747,6 +5749,8 @@ public sealed partial class DocumentCanvasHostTests
         {
             DisposeCount++;
             _lifecycle?.Add("observer:dispose");
+            Disposing?.Invoke();
+            if (DisposeException is not null) throw DisposeException;
             return ValueTask.CompletedTask;
         }
 
@@ -5782,6 +5786,7 @@ public sealed partial class DocumentCanvasHostTests
     private sealed class RecordingPointerObserver(List<string>? lifecycle) :
         ICanvasPresentationPointerObserver
     {
+        internal Exception? DisposeException { get; set; }
         internal List<string>? Lifecycle => lifecycle;
 
         internal Func<CanvasPointerInput, Task>? OnPointerInput { get; set; }
@@ -5830,6 +5835,7 @@ public sealed partial class DocumentCanvasHostTests
         {
             DisposeCount++;
             lifecycle?.Add("pointer:dispose");
+            if (DisposeException is not null) throw DisposeException;
             return ValueTask.CompletedTask;
         }
 
@@ -6151,7 +6157,11 @@ public sealed partial class DocumentCanvasHostTests
 
         internal Canvas2DInteropOperationResult RenderResult { get; set; } = Success();
 
+        internal Func<Canvas2DRenderFrame, Canvas2DInteropOperationResult>? RenderResultFactory { get; set; }
+
         internal Exception? MeasureTextException { get; set; }
+
+        internal Func<Canvas2DTextMeasurementRequestData, Canvas2DTextMeasurementInteropResult?>? MeasureTextResultFactory { get; set; }
 
         internal bool BlockMeasureText { get; set; }
 
@@ -6223,7 +6233,7 @@ public sealed partial class DocumentCanvasHostTests
                     await RenderRelease.Task.ConfigureAwait(false);
                 }
 
-                return RenderResult;
+                return RenderResultFactory?.Invoke(frame) ?? RenderResult;
             }
             finally
             {
@@ -6264,6 +6274,8 @@ public sealed partial class DocumentCanvasHostTests
             {
                 throw MeasureTextException;
             }
+
+            if (MeasureTextResultFactory?.Invoke(request) is { } recorded) return recorded;
 
             var width = request.Text.Sum(character => character switch
             {

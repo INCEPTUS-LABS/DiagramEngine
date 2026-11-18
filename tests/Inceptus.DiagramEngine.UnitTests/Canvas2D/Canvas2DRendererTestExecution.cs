@@ -8,6 +8,10 @@ internal sealed class Canvas2DRendererTestExecution : ICanvas2DRenderExecution
 {
     internal List<string> Calls { get; } = [];
 
+    internal List<long> CancelledDecorationContentVersions { get; } = [];
+
+    internal bool ReleaseRenderOnDecorationRetirement { get; set; }
+
     internal Canvas2DViewportFrame? LastViewportFrame { get; private set; }
 
     internal Canvas2DRenderFrame? LastFrame { get; private set; }
@@ -115,6 +119,17 @@ internal sealed class Canvas2DRendererTestExecution : ICanvas2DRenderExecution
         }
 
         return RenderResult;
+    }
+
+    public ValueTask CancelDecorationPreparationAsync(long contentVersion)
+    {
+        CancelledDecorationContentVersions.Add(contentVersion);
+        if (ReleaseRenderOnDecorationRetirement)
+        {
+            RenderResult = Failure(Canvas2DRendererDiagnosticCodes.RenderingFailed);
+            RenderReleaseSignal?.TrySetResult();
+        }
+        return ValueTask.CompletedTask;
     }
 
     public ValueTask<Canvas2DTextMeasurementInteropResult> MeasureTextAsync(

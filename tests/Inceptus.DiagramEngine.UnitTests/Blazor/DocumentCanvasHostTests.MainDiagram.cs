@@ -109,6 +109,7 @@ public sealed partial class DocumentCanvasHostTests
         var operations = new DemoDocumentOperations(host, emptyRules ? new BpmnDocumentValidator(new ModelValidationCatalog([])) : null);
         var activator = new DemoPublishComponentActivator(host);
         using var services = new ServiceCollection().AddLogging().AddInceptusBpmnModeler()
+            .AddSingleton(_ => new HttpClient { BaseAddress = new Uri("https://demo.invalid/") })
             .AddSingleton<IJSRuntime>(new StandardDownloadRuntime(false)).AddSingleton<IComponentActivator>(activator).BuildServiceProvider();
         await using var renderer = new HtmlRenderer(services, NullLoggerFactory.Instance);
         var rendered = await renderer.Dispatcher.InvokeAsync(() => renderer.RenderComponentAsync<BpmnDemoHost>(

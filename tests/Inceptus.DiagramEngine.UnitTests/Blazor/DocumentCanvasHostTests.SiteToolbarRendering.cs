@@ -20,6 +20,7 @@ public sealed partial class DocumentCanvasHostTests
         await using var host = A23Host(A24Snapshot());
         await host.InitializeAsync("site-toolbar-rendering", "container");
         await using var services = new ServiceCollection().AddLogging().AddInceptusBpmnModeler()
+            .AddSingleton(_ => new HttpClient { BaseAddress = new Uri("https://demo.invalid/") })
             .AddSingleton<IJSRuntime>(new SiteToolbarJsRuntime()).BuildServiceProvider();
         await using var renderer = new SiteToolbarRenderer(services, host);
         var ready = DemoState(host);

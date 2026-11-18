@@ -19,6 +19,8 @@ public sealed partial class DocumentCanvasHostTests
     [InlineData("", false)]
     [InlineData("read-only/", true)]
     [InlineData("read-only", true)]
+    [InlineData("simulation/", true)]
+    [InlineData("simulation", true)]
     public async Task DemoRoutesRenderTheMatchingModeInTheSharedApplicationLayout(string path, bool readOnly)
     {
         using var culture = new ModelerCultureScope("en");
@@ -31,13 +33,42 @@ public sealed partial class DocumentCanvasHostTests
         Assert.Contains("class=\"display-mode-toggle\"", markup, StringComparison.Ordinal);
         Assert.Contains("class=\"toolbar-group zoom-controls\"", markup, StringComparison.Ordinal);
         Assert.Contains("class=\"scope-breadcrumb\"", markup, StringComparison.Ordinal);
-        var toolbar = ApplicationToolbar(markup);
+        var simulation = path.StartsWith("simulation", StringComparison.Ordinal);
+        Assert.Contains("Source Demo maintenance", markup, StringComparison.Ordinal);
+        Assert.Empty(fixture.Activator.VerificationControls);
+        Assert.DoesNotContain("data-verification-action", markup, StringComparison.Ordinal);
+        Assert.DoesNotContain("data-application-verification", markup, StringComparison.Ordinal);
+        if (simulation)
+        {
+            Assert.Contains("Annotation example", markup, StringComparison.Ordinal);
+            Assert.Contains("Application action example", markup, StringComparison.Ordinal);
+            Assert.Equal(3, Regex.Count(AnnotationPanel(markup), "<button\\b"));
+            Assert.DoesNotContain("Demonstrate failure", markup, StringComparison.Ordinal);
+        }
+        else
+        {
+            Assert.DoesNotContain("Annotation example", markup, StringComparison.Ordinal);
+            Assert.DoesNotContain("Application action example", markup, StringComparison.Ordinal);
+        }
+        Assert.False(modeler.ApplicationContextualActionsEnabled);
+        Assert.Contains("aria-label=\"Demo mode\"", markup, StringComparison.Ordinal);
+        var modeGroup = Regex.Match(markup, "<nav class=\"demo-mode-navigation\"[^>]*>.*?</nav>", RegexOptions.Singleline).Value;
+        Assert.Equal(3, Regex.Count(modeGroup, "<a\\b"));
+        Assert.Equal(1, Regex.Count(modeGroup, "aria-current=\"page\""));
+        Assert.Contains($">{(simulation ? "Simulation" : readOnly ? "ReadOnly" : "Editable")}</a>", modeGroup, StringComparison.Ordinal);
+        var toolbar = ApplicationToolbar(markup, readOnly);
         Assert.Contains(">Settings</button>", toolbar, StringComparison.Ordinal);
         if (readOnly)
         {
             Assert.Single(fixture.Activator.ReadOnlyHosts);
             Assert.Empty(fixture.Activator.EditableHosts);
-            Assert.Single(Regex.Matches(toolbar, "<button\\b"));
+            Assert.Equal(3, Regex.Count(toolbar, "<button\\b"));
+            Assert.Contains("Export SVG Image", toolbar, StringComparison.Ordinal);
+            Assert.Contains("Export PNG Image", toolbar, StringComparison.Ordinal);
+            Assert.DoesNotContain("Inceptus JSON", markup, StringComparison.Ordinal);
+            Assert.DoesNotContain("type=\"file\"", markup, StringComparison.Ordinal);
+            Assert.Contains("Native information", markup, StringComparison.Ordinal);
+            Assert.Equal(simulation, Assert.Single(fixture.Activator.ReadOnlyHosts).SimulationExamples);
             Assert.DoesNotContain("<input", toolbar, StringComparison.Ordinal);
             Assert.DoesNotContain("<select", toolbar, StringComparison.Ordinal);
             Assert.DoesNotContain("@onclick", markup, StringComparison.Ordinal);
@@ -129,21 +160,142 @@ public sealed partial class DocumentCanvasHostTests
     }
 
     [Theory]
+    [InlineData("", EditingSessionAccessMode.Editable)]
+    [InlineData("read-only/", EditingSessionAccessMode.ReadOnly)]
+    [InlineData("simulation/", EditingSessionAccessMode.ReadOnly)]
+    public async Task DemoVerificationUnmountAndRemountUseNormalChildLifetimeWithinTheSamePage(
+        string path, EditingSessionAccessMode mode)
+    {
+        await using var fixture = await DemoPageFixture.CreateAsync(path);
+        await fixture.EnableMaintenanceAsync();
+        var control = Assert.Single(fixture.Activator.VerificationControls);
+        var layout = Assert.Single(fixture.Activator.Layouts);
+        var original = Assert.Single(fixture.Activator.Modelers);
+        var source = original.InitialDocument;
+        Assert.True(control.AllowReplacement);
+        Assert.True(control.UnmountRequested.HasDelegate);
+        Assert.True(control.MountRequested.HasDelegate);
+        var current = original;
+        for (var cycle = 0; cycle < 2; cycle++)
+        {
+            var mountId = control.MountId;
+            var generation = control.MountGeneration;
+            var retiredReady = current.Ready;
+            var retiredDocumentChanged = current.DocumentChanged;
+            // Invoke the parent's actual compiled child callbacks. HtmlRenderer intentionally
+            // does not initialize a browser surface; this proves Blazor lifetime, not renderer cleanup.
+            await fixture.Renderer.Dispatcher.InvokeAsync(() => control.UnmountRequested.InvokeAsync());
+            Assert.True(ModelerDisposed(current));
+            Assert.False(control.Mounted);
+            Assert.Null(control.Modeler);
+            Assert.DoesNotContain("class=\"scope-breadcrumb\"", await fixture.MarkupAsync(), StringComparison.Ordinal);
+            await fixture.Renderer.Dispatcher.InvokeAsync(() =>
+                retiredReady.InvokeAsync(new BpmnModelerReadyEventArgs(A24Snapshot())));
+            Assert.Equal(cycle * 2 + 1, control.RetiredCallbackCount);
+
+            await fixture.Renderer.Dispatcher.InvokeAsync(() => control.MountRequested.InvokeAsync());
+            var replacement = fixture.Activator.Modelers.Last();
+            Assert.NotSame(current, replacement);
+            Assert.NotSame(original, replacement);
+            Assert.False(ModelerDisposed(replacement));
+            Assert.Equal(mode, replacement.AccessMode);
+            Assert.True(control.Mounted);
+            Assert.True(control.MountGeneration > generation);
+            Assert.NotEqual(mountId, control.MountId);
+            Assert.Same(control, Assert.Single(fixture.Activator.VerificationControls));
+            Assert.Same(layout, Assert.Single(fixture.Activator.Layouts));
+            Assert.Equal(source, replacement.InitialDocument);
+            await fixture.Renderer.Dispatcher.InvokeAsync(() => retiredDocumentChanged.InvokeAsync(
+                new BpmnModelerDocumentChangedEventArgs(A24Snapshot(), BpmnModelerDocumentChangeKind.DocumentReplacement)));
+            Assert.Equal(cycle * 2 + 2, control.RetiredCallbackCount);
+            Assert.Equal(source, replacement.InitialDocument);
+            Assert.Empty(fixture.Navigation.Navigations);
+            current = replacement;
+        }
+        Assert.Equal(3, fixture.Activator.Modelers.Count);
+        Assert.Single(mode == EditingSessionAccessMode.ReadOnly
+            ? fixture.Activator.ReadOnlyHosts.Cast<object>() : fixture.Activator.EditableHosts.Cast<object>());
+    }
+
+    [Theory]
+    [InlineData("", EditingSessionAccessMode.Editable)]
+    [InlineData("simulation/", EditingSessionAccessMode.ReadOnly)]
+    public async Task DemoApplicationPanelRemainsOutsideModelerAcrossDisplayModes(string path, EditingSessionAccessMode mode)
+    {
+        await using var fixture = await DemoPageFixture.CreateAsync(path);
+        await fixture.EnableMaintenanceAsync();
+        var modeler = Assert.Single(fixture.Activator.Modelers);
+        var source = modeler.InitialDocument;
+        var provider = modeler.ApplicationActionProvider;
+        var invocation = modeler.ApplicationActionInvoked;
+        foreach (var expectedMode in new[] { "normal", "maximized", "normal" })
+        {
+            var markup = await fixture.MarkupAsync();
+            Assert.Contains($"class=\"demo-host\" data-display-mode=\"{expectedMode}\"", markup, StringComparison.Ordinal);
+            var panelStart = markup.IndexOf("<details class=\"demo-application-actions\"", StringComparison.Ordinal);
+            var modelerStart = markup.IndexOf("class=\"inceptus-bpmn-modeler", StringComparison.Ordinal);
+            Assert.True(panelStart >= 0 && modelerStart >= 0);
+            var panelEnd = markup.IndexOf("</details>", panelStart, StringComparison.Ordinal);
+            Assert.True(panelEnd > panelStart);
+            // Simulation examples stay in the top toolbar, Editable examples in maintenance.
+            // Both remain outside the modeler and survive maximize/restore without remounting.
+            Assert.True(panelEnd < modelerStart);
+            if (mode == EditingSessionAccessMode.Editable)
+                Assert.DoesNotContain("demo-application-actions", ApplicationToolbar(markup), StringComparison.Ordinal);
+            else
+            {
+                var toolbar = ApplicationToolbar(markup);
+                Assert.Contains("demo-application-actions", toolbar, StringComparison.Ordinal);
+                Assert.Contains("demo-annotations", toolbar, StringComparison.Ordinal);
+                Assert.DoesNotContain("hidden", HostToolbarTag(markup), StringComparison.Ordinal);
+                var aside = markup[markup.IndexOf("<aside class=\"demo-information\"", StringComparison.Ordinal)..];
+                Assert.DoesNotContain("demo-application-actions", aside, StringComparison.Ordinal);
+                Assert.DoesNotContain("demo-annotations", aside, StringComparison.Ordinal);
+            }
+            Assert.DoesNotContain(" hidden", markup[panelStart..markup.IndexOf('>', panelStart)], StringComparison.Ordinal);
+            Assert.Same(modeler, Assert.Single(fixture.Activator.Modelers));
+            Assert.Equal(mode, modeler.AccessMode);
+            Assert.Same(source, modeler.InitialDocument);
+            Assert.Same(provider, modeler.ApplicationActionProvider);
+            Assert.Equal(invocation, modeler.ApplicationActionInvoked);
+            Assert.False(ModelerDisposed(modeler));
+            if (mode == EditingSessionAccessMode.ReadOnly)
+            {
+                Assert.DoesNotContain("history-controls", markup, StringComparison.Ordinal);
+                Assert.DoesNotContain("toolbox-panel", markup, StringComparison.Ordinal);
+            }
+            await fixture.Renderer.Dispatcher.InvokeAsync(modeler.ToggleDisplayModeAsync);
+        }
+    }
+
+    [Theory]
     [InlineData("")]
     [InlineData("read-only/")]
+    [InlineData("simulation/")]
     public async Task DemoDisplayModeRoundTripPreservesThePageAndModeler(string path)
     {
         await using var fixture = await DemoPageFixture.CreateAsync(path);
         var modeler = Assert.Single(fixture.Activator.Modelers);
         var layout = Assert.Single(fixture.Activator.Layouts);
+        var provider = modeler.ApplicationActionProvider;
+        var invocation = modeler.ApplicationActionInvoked;
         for (var index = 0; index < 3; index++)
         {
             await fixture.Renderer.Dispatcher.InvokeAsync(modeler.ToggleDisplayModeAsync);
             var maximized = await fixture.MarkupAsync();
-            Assert.Contains("hidden", HostToolbarTag(maximized), StringComparison.Ordinal);
+            if (path == "simulation/")
+            {
+                Assert.DoesNotContain("hidden", HostToolbarTag(maximized), StringComparison.Ordinal);
+                Assert.Contains("hidden", ApplicationToolbar(maximized, true).Split('>')[0], StringComparison.Ordinal);
+            }
+            else Assert.Contains("hidden", HostToolbarTag(maximized), StringComparison.Ordinal);
             Assert.Contains("class=\"demo-host\" data-display-mode=\"maximized\"", maximized, StringComparison.Ordinal);
             Assert.Same(modeler, Assert.Single(fixture.Activator.Modelers));
             Assert.Same(layout, Assert.Single(fixture.Activator.Layouts));
+            // Ordinary parent renders must not re-register the application callback and
+            // thereby retire an otherwise current application-action request.
+            Assert.Same(provider, modeler.ApplicationActionProvider);
+            Assert.Equal(invocation, modeler.ApplicationActionInvoked);
             await fixture.Renderer.Dispatcher.InvokeAsync(modeler.ToggleDisplayModeAsync);
             Assert.DoesNotContain("hidden", HostToolbarTag(await fixture.MarkupAsync()), StringComparison.Ordinal);
         }
@@ -153,11 +305,25 @@ public sealed partial class DocumentCanvasHostTests
     private static bool ModelerDisposed(InceptusBpmnModeler modeler) =>
         Assert.IsType<bool>(typeof(InceptusBpmnModeler).GetField("_disposed", PropertiesUxFlags)!.GetValue(modeler));
 
-    private static string ApplicationToolbar(string markup)
+    private static string ApplicationToolbar(string markup, bool documentActionsOnly = false)
     {
-        var start = markup.IndexOf("<div class=\"editor-toolbar host-toolbar\"", StringComparison.Ordinal);
-        var end = markup.IndexOf("<canvas", start, StringComparison.Ordinal);
-        Assert.True(start >= 0 && end > start);
+        var start = markup.IndexOf(documentActionsOnly ? "<div class=\"demo-document-actions\"" : "<div class=\"editor-toolbar host-toolbar\"", StringComparison.Ordinal);
+        Assert.True(start >= 0);
+        var depth = 0;
+        foreach (Match tag in Regex.Matches(markup[start..], "</?div\\b[^>]*>"))
+        {
+            depth += tag.Value.StartsWith("</", StringComparison.Ordinal) ? -1 : 1;
+            if (depth == 0) return markup[start..(start + tag.Index + tag.Length)];
+        }
+        throw new InvalidOperationException("The application toolbar has no matching closing element.");
+    }
+
+    private static string AnnotationPanel(string markup)
+    {
+        var start = markup.IndexOf("<details class=\"demo-annotations\"", StringComparison.Ordinal);
+        Assert.True(start >= 0);
+        var end = markup.IndexOf("</details>", start, StringComparison.Ordinal);
+        Assert.True(end > start);
         return markup[start..end];
     }
 
@@ -174,6 +340,7 @@ public sealed partial class DocumentCanvasHostTests
             Activator = new();
             Navigation = new(path);
             var services = new ServiceCollection().AddLogging().AddInceptusBpmnModeler();
+            services.AddSingleton(_ => new HttpClient { BaseAddress = new Uri("https://demo.invalid/") });
             services.AddSupplyValueFromQueryProvider();
             _services = services.AddSingleton<IJSRuntime>(new GridStorageRuntime())
                 .AddSingleton<NavigationManager>(Navigation)
@@ -190,6 +357,9 @@ public sealed partial class DocumentCanvasHostTests
                 fixture.Renderer.RenderComponentAsync<Inceptus.DiagramEngine.Blazor.App>());
             return fixture;
         }
+
+        internal Task EnableMaintenanceAsync() => Renderer.Dispatcher.InvokeAsync(() =>
+            Assert.Single(Activator.Maintenance).EnabledChanged.InvokeAsync(true));
 
         internal Task<string> MarkupAsync() => Renderer.Dispatcher.InvokeAsync(_root.ToHtmlString);
 
@@ -232,6 +402,8 @@ public sealed partial class DocumentCanvasHostTests
         internal List<ReadOnlyBpmnDemoHost> ReadOnlyHosts { get; } = [];
         internal List<InceptusBpmnModeler> Modelers { get; } = [];
         internal List<DemoApplicationLayout> Layouts { get; } = [];
+        internal List<DemoMaintenance> Maintenance { get; } = [];
+        internal List<DemoVerificationControls> VerificationControls { get; } = [];
 
         public IComponent CreateInstance(Type componentType)
         {
@@ -240,6 +412,8 @@ public sealed partial class DocumentCanvasHostTests
             if (component is ReadOnlyBpmnDemoHost viewer) ReadOnlyHosts.Add(viewer);
             if (component is InceptusBpmnModeler modeler) Modelers.Add(modeler);
             if (component is DemoApplicationLayout layout) Layouts.Add(layout);
+            if (component is DemoMaintenance maintenance) Maintenance.Add(maintenance);
+            if (component is DemoVerificationControls verification) VerificationControls.Add(verification);
             return component;
         }
     }

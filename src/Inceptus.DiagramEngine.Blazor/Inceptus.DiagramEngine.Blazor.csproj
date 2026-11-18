@@ -2,6 +2,7 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <IsPackable>false</IsPackable>
+    <BlazorWebAssemblyLoadAllGlobalizationData>true</BlazorWebAssemblyLoadAllGlobalizationData>
   </PropertyGroup>
 
   <ItemGroup>
@@ -20,5 +21,9 @@
   <ItemGroup>
     <EmbeddedResource Include="Demo/bpmn-demo.inceptus.json"
                       LogicalName="Inceptus.DiagramEngine.Blazor.Demo.bpmn-demo.inceptus.json" />
+    <EmbeddedResource Include="Demo/diagonal-message.inceptus.json"
+                      LogicalName="Inceptus.DiagramEngine.Blazor.Demo.diagonal-message.inceptus.json" />
+    <EmbeddedResource Include="Demo/annotation-status.svg"
+                      LogicalName="Inceptus.DiagramEngine.Blazor.Demo.annotation-status.svg" />
   </ItemGroup>
 </Project>

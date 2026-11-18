@@ -85,6 +85,7 @@ public partial class BpmnDemoHost
     public async ValueTask DisposeAsync()
     {
         _disposed = true;
+        _actionExample?.Dispose();
         InvalidateToolbarPresentation();
         _componentLifetime.Cancel();
         _publishOperationCancellation?.Cancel();

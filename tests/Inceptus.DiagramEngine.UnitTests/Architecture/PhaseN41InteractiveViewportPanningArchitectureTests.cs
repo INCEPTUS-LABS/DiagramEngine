@@ -59,7 +59,27 @@ public sealed class PhaseN41InteractiveViewportPanningArchitectureTests
         const string removeContextMenuKey = "this.#canvas.removeEventListener(\"keydown\", this.#onKeyDown);";
         Assert.Contains(addContextMenuKey, javascript, StringComparison.Ordinal);
         Assert.Contains(removeContextMenuKey, javascript, StringComparison.Ordinal);
+        // The approved application toolbar suppresses only native navigation defaults on
+        // its own DOM shell. It cannot add canvas keyboard modes or action authority.
+        var toolbarKey = Between(javascript, "export function prepareApplicationToolbar(", "export function handleToolbarKey(");
+        const string expectedToolbarKey = """
+            export function prepareApplicationToolbar(toolbarElementId) {
+                const toolbar = document.getElementById(toolbarElementId);
+                if (!(toolbar instanceof HTMLElement)) return false;
+                if (!applicationToolbarKeyBoundaries.has(toolbar)) {
+                    applicationToolbarKeyBoundaries.add(toolbar);
+                    toolbar.addEventListener("keydown", event => {
+                        if (["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) event.preventDefault();
+                    });
+                }
+                return true;
+            }
+            """;
+        Assert.Equal(Regex.Replace(expectedToolbarKey, @"\s+", string.Empty),
+            Regex.Replace(toolbarKey, @"\s+", string.Empty));
+        Assert.Single(Regex.Matches(javascript, "export function prepareApplicationToolbar\\("));
         var otherInput = javascript.Replace(contextMenuKey, string.Empty, StringComparison.Ordinal)
+            .Replace(toolbarKey, string.Empty, StringComparison.Ordinal)
             .Replace(addContextMenuKey, string.Empty, StringComparison.Ordinal)
             .Replace(removeContextMenuKey, string.Empty, StringComparison.Ordinal)
             .Replace("#onKeyDown;", string.Empty, StringComparison.Ordinal);

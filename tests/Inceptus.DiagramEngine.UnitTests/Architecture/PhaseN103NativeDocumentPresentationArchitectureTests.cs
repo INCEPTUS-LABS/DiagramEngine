@@ -225,6 +225,37 @@ public sealed class PhaseN103NativeDocumentPresentationArchitectureTests
     }
 
     [Fact]
+    public void DemoApplicationPanelsReserveSpaceOutsideTheModelerInsteadOfCoveringZoomControls()
+    {
+        var layout = ReadProductionFile("Inceptus.DiagramEngine.Blazor", "Demo", "DemoApplicationLayout.razor.css");
+        var actions = ReadProductionFile("Inceptus.DiagramEngine.Blazor", "Demo", "DemoApplicationActions.razor.css");
+
+        // Optional maintenance and ordinary information reserve space outside the
+        // native surface in all three modes, including the responsive stacked layout.
+        Assert.Contains("display: flex;", Rule(layout, ".demo-host"), StringComparison.Ordinal);
+        Assert.Contains("flex-direction: column;", Rule(layout, ".demo-host"), StringComparison.Ordinal);
+        Assert.Contains("min-height: 0;", Rule(layout, ".demo-host ::deep .demo-workspace"), StringComparison.Ordinal);
+        Assert.Contains("overflow: auto;", Rule(layout, ".demo-host ::deep .demo-information"), StringComparison.Ordinal);
+        Assert.DoesNotContain("position: absolute", Rule(layout, ".demo-host ::deep .demo-information"), StringComparison.Ordinal);
+        Assert.Contains("@media (max-width: 760px)", layout, StringComparison.Ordinal);
+        var panel = Rule(actions, ".demo-application-actions");
+        Assert.Contains("position: relative;", panel, StringComparison.Ordinal);
+        Assert.DoesNotMatch(@"\b(?:top|bottom|left|right|inset)\s*:", panel);
+        Assert.Contains("max-width: min(28rem, calc(100% - 1.5rem));", panel, StringComparison.Ordinal);
+        Assert.Matches(@"max-height:\s*min\([^;]*dvh\);", panel);
+        Assert.Contains("overflow: auto;", panel, StringComparison.Ordinal);
+
+        // This protects the CSS containment contract; real-browser hit tests establish
+        // layout and pointer reachability for collapsed/expanded and narrow presentations.
+        static string Rule(string styles, string selector)
+        {
+            var block = Regex.Match(styles, Regex.Escape(selector) + @"\s*\{(?<body>[^}]*)\}", RegexOptions.CultureInvariant);
+            Assert.True(block.Success, $"Missing CSS rule: {selector}");
+            return block.Groups["body"].Value;
+        }
+    }
+
+    [Fact]
     public void SharedDemoLayoutConstrainsSettingsToTheViewportIncludingPadding()
     {
         var styles = ReadProductionFile("Inceptus.DiagramEngine.Blazor", "Demo", "DemoApplicationLayout.razor.css");

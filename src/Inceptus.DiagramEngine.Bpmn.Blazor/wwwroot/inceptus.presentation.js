@@ -74,6 +74,66 @@ export function restoreCanvasFocus(canvasElementId) {
     return true;
 }
 
+const applicationToolbarKeyBoundaries = new WeakSet();
+
+// Browser key defaults only. Managed code chooses the prefix, anchor and fixed CSS
+// sizing; buttons retain the one native click activation path.
+export function prepareApplicationToolbar(toolbarElementId) {
+    const toolbar = document.getElementById(toolbarElementId);
+    if (!(toolbar instanceof HTMLElement)) return false;
+    if (!applicationToolbarKeyBoundaries.has(toolbar)) {
+        applicationToolbarKeyBoundaries.add(toolbar);
+        toolbar.addEventListener("keydown", event => {
+            if (["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) event.preventDefault();
+        });
+    }
+    return true;
+}
+
+export function handleToolbarKey(toolbarElementId, key) {
+    const toolbar = document.getElementById(toolbarElementId);
+    if (!(toolbar instanceof HTMLElement)) return false;
+    const items = [...toolbar.querySelectorAll('button')].filter(item =>
+        !item.disabled && item.getClientRects().length > 0 &&
+        !item.closest('.element-creation') && !item.closest('[role="menu"]'));
+    if (items.length === 0) return false;
+    const current = items.indexOf(document.activeElement);
+    let next;
+    if (key === "ArrowRight") next = (current + 1) % items.length;
+    else if (key === "ArrowLeft") next = (current < 0 ? items.length - 1 : current + items.length - 1) % items.length;
+    else if (key === "Home") next = 0;
+    else if (key === "End") next = items.length - 1;
+    else return false;
+    items[next].focus({ preventScroll: true });
+    return true;
+}
+
+export function focusToolbarMore(toolbarElementId) {
+    const toolbar = document.getElementById(toolbarElementId);
+    if (!(toolbar instanceof HTMLElement)) return false;
+    const button = toolbar.querySelector('.application-more');
+    if (!(button instanceof HTMLElement)) return false;
+    button.focus({ preventScroll: true });
+    return true;
+}
+
+export function focusToolbarOverflow(menuElementId, surfaceElementId, takeFocus = true) {
+    const menu = document.getElementById(menuElementId);
+    const surface = document.getElementById(surfaceElementId);
+    if (!(menu instanceof HTMLElement) || !(surface instanceof HTMLElement) || !menu.parentElement) return false;
+    const area = surface.getBoundingClientRect();
+    const parent = menu.parentElement.getBoundingClientRect();
+    menu.style.maxWidth = `${Math.max(0, area.width - 16)}px`;
+    menu.style.maxHeight = `${Math.max(0, area.height - 16)}px`;
+    const bounds = menu.getBoundingClientRect();
+    const left = Math.max(area.left + 8, Math.min(parent.left, area.left + area.width - bounds.width - 8));
+    const top = Math.max(area.top + 8, Math.min(parent.top + parent.height + 8, area.top + area.height - bounds.height - 8));
+    menu.style.left = `${left - parent.left}px`;
+    menu.style.top = `${top - parent.top}px`;
+    if (takeFocus) (visibleMenuItems(menu)[0] ?? menu).focus({ preventScroll: true });
+    return true;
+}
+
 export function createCanvasPointerObserver(canvasElementId, dotNetReference) {
     const canvas = document.getElementById(canvasElementId);
     if (!(canvas instanceof HTMLCanvasElement)) {

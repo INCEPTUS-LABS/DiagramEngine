@@ -1,0 +1,78 @@
+@namespace Inceptus.DiagramEngine.Blazor.Demo
+@using Microsoft.AspNetCore.Components.Web
+
+@if (Example.VerificationEnabled)
+{
+    <fieldset class="application-inspector-verification">
+        <legend>Inspector lifecycle verification</legend>
+        <button @ref="_replace" type="button" data-inspector-verification-action="replace" disabled="@(!Example.CanUseInspectorLifecycle)"
+                @onclick="ReplaceAsync">Replace source with inspector open</button>
+        <button @ref="_unmount" type="button" data-inspector-verification-action="unmount"
+                disabled="@(!CanUnmount || !UnmountRequested.HasDelegate || !Example.CanUseInspectorLifecycle)"
+                @onclick="UnmountAsync">Unmount modeler with inspector open</button>
+        <p role="status" data-inspector-verification-status="@Example.InspectorLifecycleStatus"
+           data-inspector-same-component="@Example.InspectorSameComponent">@Example.InspectorLifecycleStatus. @Example.InspectorLifecycleFeedback</p>
+        @if (Example.InspectorLifecycleBefore is { } before)
+        {
+            <p data-inspector-verification-before>Before: @before</p>
+        }
+        @if (Example.InspectorLifecycleAfter is { } after)
+        {
+            <p data-inspector-verification-after>After: @after</p>
+        }
+        @if (Example.InspectorReplacementResult is { } result)
+        {
+            @foreach (var diagnostic in result.Diagnostics)
+            {
+                <p data-inspector-verification-diagnostic="@diagnostic.Code">@diagnostic.Code: @diagnostic.Message</p>
+            }
+        }
+    </fieldset>
+}
+
+@code {
+    [Parameter, EditorRequired] public DemoApplicationActionExample Example { get; set; } = null!;
+    [Parameter] public bool CanUnmount { get; set; }
+    [Parameter] public EventCallback UnmountRequested { get; set; }
+    [Parameter] public EventCallback BeforeOperation { get; set; }
+    [Parameter] public EventCallback Changed { get; set; }
+    private ElementReference _replace;
+    private ElementReference _unmount;
+    private bool _operationStarting;
+
+    internal async Task<bool> FocusLastAsync()
+    {
+        if (!Example.CanUseInspectorLifecycle) return false;
+        if (CanUnmount && UnmountRequested.HasDelegate) await _unmount.FocusAsync();
+        else await _replace.FocusAsync();
+        return true;
+    }
+
+    private async Task ReplaceAsync()
+    {
+        if (_operationStarting || !Example.CanUseInspectorLifecycle) return;
+        _operationStarting = true;
+        try
+        {
+            // Move focus to the application's stable Close control before this button
+            // becomes disabled while replacement is pending.
+            await BeforeOperation.InvokeAsync();
+            await Example.ReplaceFromInspectorAsync();
+            await Changed.InvokeAsync();
+        }
+        finally { _operationStarting = false; }
+    }
+
+    private async Task UnmountAsync()
+    {
+        if (_operationStarting || !CanUnmount || !UnmountRequested.HasDelegate || !Example.CanUseInspectorLifecycle) return;
+        _operationStarting = true;
+        try
+        {
+            await BeforeOperation.InvokeAsync();
+            await Example.UnmountFromInspectorAsync(UnmountRequested);
+            await Changed.InvokeAsync();
+        }
+        finally { _operationStarting = false; }
+    }
+}

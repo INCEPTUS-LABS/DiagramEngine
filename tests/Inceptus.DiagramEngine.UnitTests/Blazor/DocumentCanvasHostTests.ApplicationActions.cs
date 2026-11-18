@@ -815,6 +815,7 @@ public sealed partial class DocumentCanvasHostTests
         internal ConcurrentQueue<BpmnApplicationActionInvocationEventArgs> Invocations { get; } = new();
         internal Func<BpmnApplicationActionInvocationEventArgs, Task>? Callback { get; set; }
         internal Func<Task>? BeforeDispatch { get; set; }
+        internal BpmnApplicationActionResult? TypedOutcome { get; set; }
         internal ValueTask InitializeAsync() => _fixture.InitializeAsync();
 
         private async Task DispatchNotificationAsync(object notification)
@@ -831,7 +832,8 @@ public sealed partial class DocumentCanvasHostTests
             try
             {
                 if (Callback is { } callback) await callback(invocation);
-                dispatch.Complete();
+                if (TypedOutcome is { } outcome) dispatch.Complete(outcome);
+                else dispatch.Complete();
             }
             catch (Exception exception) { dispatch.Fail(exception); }
         }

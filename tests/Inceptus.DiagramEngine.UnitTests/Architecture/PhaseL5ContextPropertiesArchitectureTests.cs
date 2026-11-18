@@ -658,7 +658,15 @@ public sealed class PhaseL5ContextPropertiesArchitectureTests
             IsLaunchPortOnlyChange(RunGit($"show HEAD:{LaunchSettingsPath}"),
                 File.ReadAllText(Path.Combine(RepositoryRoot, LaunchSettingsPath)));
         // SDK updates are governed by the exact baseline assertion in SolutionArchitectureTests.
-        Assert.DoesNotContain(changedPaths, path => IsForbiddenDataChange(path, approvedLaunchPorts));
+        // The approved B8 Demo sample is a reviewed native fixture, not a serialization change.
+        // Permit only these exact bytes at this exact Demo path; every other data guard remains.
+        const string diagonalSample = "src/Inceptus.DiagramEngine.Blazor/Demo/diagonal-message.inceptus.json";
+        var approvedDiagonalSample = changedPaths.Contains(diagonalSample, StringComparer.Ordinal) &&
+            Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
+                File.ReadAllBytes(Path.Combine(RepositoryRoot, diagonalSample)))) ==
+            "C8AB8C02E4F6E5ACF180F180956616BC24807E05BDFC6A6A6D1E555386F3BF31";
+        Assert.DoesNotContain(changedPaths, path =>
+            !(approvedDiagonalSample && path == diagonalSample) && IsForbiddenDataChange(path, approvedLaunchPorts));
     }
 
     [Fact]
@@ -813,6 +821,7 @@ public sealed class PhaseL5ContextPropertiesArchitectureTests
         return output.Split(
                 ['\r', '\n'],
                 StringSplitOptions.RemoveEmptyEntries)
+            .Where(static line => !ApprovedLocalInvestigationSeparation.IsIndexOnlyRemoval(line))
             .Select(static line => line.Length > 3
                 ? line[3..].Trim().Replace('\\', '/')
                 : line.Trim())

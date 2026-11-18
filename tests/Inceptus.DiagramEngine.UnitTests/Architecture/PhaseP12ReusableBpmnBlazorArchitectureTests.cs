@@ -31,15 +31,15 @@ public sealed class PhaseP12ReusableBpmnBlazorArchitectureTests
     }
 
     [Fact]
-    public void SourceHostStartsWithInvariantDataCultureAndNeutralEnglishUICulture()
+    public void SourceHostStartsWithInvariantDataCultureAndValidatedOptInUICulture()
     {
         var hostRoot = Path.Combine(RepositoryRoot, "src", "Inceptus.DiagramEngine.Blazor");
         var program = File.ReadAllText(Path.Combine(hostRoot, "Program.cs"));
-        var builderIndex = program.IndexOf("WebAssemblyHostBuilder.CreateDefault(args)", StringComparison.Ordinal);
-        Assert.True(builderIndex >= 0);
+        var runIndex = program.IndexOf("await host.RunAsync();", StringComparison.Ordinal);
+        Assert.True(runIndex >= 0);
         string[] cultureStatements =
         [
-            "var uiCulture = CultureInfo.GetCultureInfo(\"en\");",
+            "var uiCulture = DemoUiCulture.Resolve(host.Services.GetRequiredService<NavigationManager>().Uri);",
             "CultureInfo.DefaultThreadCurrentCulture = CultureInfo.InvariantCulture;",
             "CultureInfo.DefaultThreadCurrentUICulture = uiCulture;",
             "CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;",
@@ -49,10 +49,14 @@ public sealed class PhaseP12ReusableBpmnBlazorArchitectureTests
         foreach (var statement in cultureStatements)
         {
             var index = program.IndexOf(statement, StringComparison.Ordinal);
-            Assert.True(index > previousIndex && index < builderIndex,
-                $"Source-host culture must be established before host creation: {statement}");
+            Assert.True(index > previousIndex && index < runIndex,
+                $"Source-host culture must be established before rendering the application: {statement}");
             previousIndex = index;
         }
+
+        Assert.Equal("en", Inceptus.DiagramEngine.Blazor.Demo.DemoUiCulture.Resolve("https://demo.invalid/").Name);
+        var project = XDocument.Load(Path.Combine(hostRoot, "Inceptus.DiagramEngine.Blazor.csproj"));
+        Assert.Equal("true", Assert.Single(project.Descendants("BlazorWebAssemblyLoadAllGlobalizationData")).Value);
 
         Assert.Contains("<html lang=\"en\">", File.ReadAllText(Path.Combine(hostRoot, "wwwroot", "index.html")),
             StringComparison.Ordinal);

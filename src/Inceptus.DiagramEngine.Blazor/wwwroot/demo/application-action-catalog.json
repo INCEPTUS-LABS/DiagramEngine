@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "inspectEnabled": true,
+  "inspectLabel": "Inspect details",
+  "description": "Application catalogue: inspect the exact captured diagram target. Application configuration is separate from the native document."
+}

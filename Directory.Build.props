@@ -1,8 +1,8 @@
 <Project>
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
-    <Version>1.1.2</Version>
-    <PublicationBaselineVerifiedUtc>2026-11-13T09:37:10Z</PublicationBaselineVerifiedUtc>
+    <Version>1.2.0</Version>
+    <PublicationBaselineVerifiedUtc>2026-11-18T10:51:49Z</PublicationBaselineVerifiedUtc>
     <Authors>Robert Prokopczuk</Authors>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -19,12 +19,12 @@
   </PropertyGroup>
   <!-- Verified through nuget.org during preparation; build and pack never query the feed. -->
   <ItemGroup Label="PublicationBaseline">
-    <PublicationBaselinePackage Include="Inceptus.DiagramEngine.Contracts" State="Published" PublishedVersion="1.0.0" />
-    <PublicationBaselinePackage Include="Inceptus.DiagramEngine.Runtime" State="Published" PublishedVersion="1.0.0" />
-    <PublicationBaselinePackage Include="Inceptus.DiagramEngine.Bpmn" State="Published" PublishedVersion="1.0.0" />
-    <PublicationBaselinePackage Include="Inceptus.DiagramEngine.Organizational" State="Published" PublishedVersion="1.0.0" />
-    <PublicationBaselinePackage Include="Inceptus.DiagramEngine.Canvas2D" State="Published" PublishedVersion="1.0.0" />
-    <PublicationBaselinePackage Include="Inceptus.DiagramEngine.Bpmn.Blazor" State="Published" PublishedVersion="1.0.0" />
-    <PublicationBaselinePackage Include="Inceptus.Bpmn.Integration" State="Published" PublishedVersion="1.0.0" />
+    <PublicationBaselinePackage Include="Inceptus.DiagramEngine.Contracts" State="Published" PublishedVersion="1.1.2" />
+    <PublicationBaselinePackage Include="Inceptus.DiagramEngine.Runtime" State="Published" PublishedVersion="1.1.2" />
+    <PublicationBaselinePackage Include="Inceptus.DiagramEngine.Bpmn" State="Published" PublishedVersion="1.1.2" />
+    <PublicationBaselinePackage Include="Inceptus.DiagramEngine.Organizational" State="Published" PublishedVersion="1.1.2" />
+    <PublicationBaselinePackage Include="Inceptus.DiagramEngine.Canvas2D" State="Published" PublishedVersion="1.1.2" />
+    <PublicationBaselinePackage Include="Inceptus.DiagramEngine.Bpmn.Blazor" State="Published" PublishedVersion="1.1.2" />
+    <PublicationBaselinePackage Include="Inceptus.Bpmn.Integration" State="Published" PublishedVersion="1.1.2" />
   </ItemGroup>
 </Project>

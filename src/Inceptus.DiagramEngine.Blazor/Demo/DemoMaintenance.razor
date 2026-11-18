@@ -1,0 +1,16 @@
+@namespace Inceptus.DiagramEngine.Blazor.Demo
+@using Microsoft.AspNetCore.Components.Web
+<details class="demo-maintenance" @onpointerdown:stopPropagation @onwheel:stopPropagation>
+    <summary>Source Demo maintenance</summary>
+    <label><input type="checkbox" data-demo-maintenance="enable" checked="@Enabled" @onchange="ToggleAsync" /> Enable existing maintenance controls</label>
+    @if (Enabled)
+    {
+        <div class="maintenance-content">@ChildContent</div>
+    }
+</details>
+@code {
+    [Parameter] public bool Enabled { get; set; }
+    [Parameter] public EventCallback<bool> EnabledChanged { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    private Task ToggleAsync(ChangeEventArgs args) => EnabledChanged.InvokeAsync(args.Value is true);
+}

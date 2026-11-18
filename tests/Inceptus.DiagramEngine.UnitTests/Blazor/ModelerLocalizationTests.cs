@@ -115,6 +115,7 @@ public sealed class ModelerLocalizationTests
     {
         using var scope = new ModelerCultureScope(culture);
         using var services = new ServiceCollection().AddLogging().AddInceptusBpmnModeler()
+            .AddSingleton(_ => new HttpClient { BaseAddress = new Uri("https://demo.invalid/") })
             .AddSingleton<IJSRuntime>(new NoBrowserRuntime()).BuildServiceProvider();
         await using var renderer = new HtmlRenderer(services, NullLoggerFactory.Instance);
         var root = await renderer.Dispatcher.InvokeAsync(() => renderer.RenderComponentAsync<BpmnDemoHost>());

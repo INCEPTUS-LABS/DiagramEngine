@@ -235,6 +235,7 @@ public sealed partial class DocumentCanvasHostTests
 
     private static ServiceProvider DisplayModeServices(IComponentActivator activator) =>
         new ServiceCollection().AddLogging().AddInceptusBpmnModeler()
+            .AddSingleton(_ => new HttpClient { BaseAddress = new Uri("https://demo.invalid/") })
             .AddSingleton<IJSRuntime>(new PublishDownloadRuntime())
             .AddSingleton(activator).BuildServiceProvider();
 

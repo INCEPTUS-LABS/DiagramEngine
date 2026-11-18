@@ -54,7 +54,9 @@ internal sealed partial class BpmnModelerFacade : IDisposable, IBpmnDocumentEdit
 
             host.ModelerNotifications = Notifications;
             _host = host;
-            host.SetApplicationActions(_applicationActionProvider, _applicationActionCallbackAvailable);
+            host.SetApplicationActions(_applicationActionProvider, _applicationActionCallbackAvailable,
+                _applicationTypedHandlerAvailable, _applicationContextualActionsEnabled, _applicationActionsRevision,
+                _applicationActionAuthority);
             host.ViewChanged += OnViewChanged;
         }
     }

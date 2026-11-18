@@ -32,9 +32,11 @@ internal sealed class BpmnModelerNotifications : IDisposable
         {
             if (_disposed)
             {
+                (notification as BpmnApplicationActionDispatch)?.Observe(BpmnActionObservationStage.QueueRejected);
                 return Task.CompletedTask;
             }
 
+            (notification as BpmnApplicationActionDispatch)?.Observe(BpmnActionObservationStage.DispatchEnqueued);
             return _pending = InvokeInOrderAsync(_pending, notification);
         }
     }
@@ -56,11 +58,13 @@ internal sealed class BpmnModelerNotifications : IDisposable
         {
             if (_disposed)
             {
+                (notification as BpmnApplicationActionDispatch)?.Observe(BpmnActionObservationStage.QueueDropped);
                 return;
             }
         }
 
         // The component dispatcher also checks disposal at the point of invocation.
+        (notification as BpmnApplicationActionDispatch)?.Observe(BpmnActionObservationStage.QueueDelivery);
         await _invoke(notification).ConfigureAwait(false);
     }
 }

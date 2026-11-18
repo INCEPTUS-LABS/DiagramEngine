@@ -1,0 +1,76 @@
+@namespace Inceptus.DiagramEngine.Blazor.Demo
+@using Microsoft.AspNetCore.Components.Web
+@implements IDisposable
+@{ var currentState = Modeler?.CaptureEditorContext()?.Presentation; }
+
+<details class="demo-annotations" @onpointerdown:stopPropagation @onwheel:stopPropagation>
+    <summary>Annotation example</summary>
+    <p>Update shows one text note below each unambiguous visible node body. Show mixed adds three independent messages to each such body.</p>
+    <label>Note <input maxlength="24" @bind="_text" disabled="@_busy" /></label>
+    <div class="annotation-actions">
+        <button type="button" data-decoration-action="update" disabled="@(!CanSubmit)" @onclick="UpdateAsync">Update annotations</button>
+        <button type="button" data-decoration-action="show-mixed" disabled="@(!CanSubmit)" @onclick="ShowMixedAsync">Show mixed annotations</button>
+        <button type="button" data-decoration-action="clear" disabled="@(!CanSubmit)" @onclick="ClearAsync">Clear annotations</button>
+        @if (Maintenance)
+        {
+            <button type="button" data-decoration-action="fail" disabled="@(!CanSubmit)" @onclick="FailAsync">Demonstrate failure</button>
+        }
+    </div>
+    @if (_mixed)
+    {
+        <label>Selected message
+            <select data-decoration-message="selected" @bind="_selectedMessageId" disabled="@(_busy || _messages.IsEmpty)">
+                @foreach (var message in _messages)
+                {
+                    <option value="@message.Id">@message.Id · @Variant(message)</option>
+                }
+            </select>
+        </label>
+        <div class="annotation-actions">
+            <button type="button" data-decoration-action="update-one" disabled="@(!CanEditMixed)" @onclick="UpdateOneAsync">Update selected message</button>
+            <button type="button" data-decoration-action="remove-one" disabled="@(!CanEditMixed)" @onclick="RemoveOneAsync">Remove selected message</button>
+            <button type="button" data-decoration-action="switch-variant" disabled="@(!CanEditMixed)" @onclick="SwitchVariantAsync">Switch selected variant</button>
+        </div>
+        <p>Update uses Note for selected text and changes only its SVG colour when present. Switch cycles text → SVG + text → SVG only.
+            Fixed rows use clipped text. The SVG-only check mark means ready; its meaning belongs to this application example.</p>
+    }
+    @if (_preparationError is not null)
+    {
+        <p role="alert" class="annotation-diagnostic">@_preparationError</p>
+    }
+    <p role="status" data-decoration-status="@(_result?.Status.ToString() ?? "Idle")"
+       data-decoration-revision="@(_result?.InputRevision ?? 0)">
+        @if (Maintenance && _result is { } result)
+        {
+            <text>Last submission: revision @result.InputRevision · accepted: @result.Accepted · @result.Status ·
+                frame presented: @(result.Presentation?.FramePresented == true) ·
+                decorations included: @(result.Presentation?.DecorationsIncluded == true).</text>
+            @foreach (var diagnostic in result.Diagnostics)
+            {
+                <span class="annotation-diagnostic">@diagnostic.Code: @diagnostic.Message</span>
+            }
+        }
+        else
+        {
+            <text>@(_result is null ? _feedback : $"Annotations: {_result.Status}.")</text>
+            @if (_result is { } latest)
+            {
+                @foreach (var diagnostic in latest.Diagnostics)
+                {
+                    <span class="annotation-diagnostic">@diagnostic.Code: @diagnostic.Message</span>
+                }
+            }
+        }
+    </p>
+    @if (Maintenance && currentState is { DecorationInputRevision: > 0 })
+    {
+        <p>Native frame observed at last UI refresh: input @currentState.DecorationInputRevision ·
+            presented: @(currentState.DecorationPresentation?.FramePresented == true) ·
+            decorations included: @(currentState.DecorationPresentation?.DecorationsIncluded == true).
+            @foreach (var diagnostic in currentState.DecorationDiagnostics)
+            {
+                <span class="annotation-diagnostic">@diagnostic.Code: @diagnostic.Message</span>
+            }
+        </p>
+    }
+</details>

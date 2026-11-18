@@ -296,4 +296,5 @@
   <data name="Appearance_participant-header" xml:space="preserve"><value>Teilnehmerkopf</value></data>
   <data name="Context_ApplicationActions" xml:space="preserve"><value>Anwendungsaktionen</value></data>
   <data name="Context_LoadingActions" xml:space="preserve"><value>Aktionen werden geladen...</value></data>
+  <data name="Context_MoreActions" xml:space="preserve"><value>Weitere Aktionen</value></data>
 </root>

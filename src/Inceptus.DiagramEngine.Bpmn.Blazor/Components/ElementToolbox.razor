@@ -7,10 +7,10 @@
 
 @if (State is { } state)
 {
-    <div class="element-actions @(state.IsConnector ? "connector-actions" : null)" style="@Position(state.ActionsPosition.X, state.ActionsPosition.Y)"
+    <div class="element-actions @(state.IsConnector ? "connector-actions" : null) @(ApplicationPlacement is null ? null : "application-native-group")" style="@(ApplicationPlacement is null ? Position(state.ActionsPosition.X, state.ActionsPosition.Y) : null)"
          @ref="_actionsElement" tabindex="-1" role="group" aria-label="@Text["ElementToolbox_Actions"]" data-element-toolbox-source="@state.VisualId.Value"
          @onpointerdown:stopPropagation @onpointerup:stopPropagation @onclick:stopPropagation @onwheel:stopPropagation
-         @onkeydown="KeyDown" @onkeydown:stopPropagation>
+         @onkeydown="ActionKeyDown" @onkeydown:stopPropagation="@(ApplicationPlacement is null)">
         @if (state.CanProperties)
         {
             <button @ref="_propertiesButton" type="button" title="@Text["ElementToolbox_PropertiesHint"]" aria-label="@Text["ElementToolbox_Properties"]" @onclick="Properties"><span aria-hidden="true">⚙</span></button>
@@ -27,7 +27,7 @@
     </div>
     @if (!state.Candidates.IsEmpty)
     {
-        <div class="element-creation" style="@(Position(state.CreationPosition.X, state.CreationPosition.Y) + FormattableString.Invariant($"width:{state.CreationWidth}px;"))"
+        <div class="element-creation" style="@(Position(state.CreationPosition.X - (ApplicationPlacement?.Position.X ?? 0), state.CreationPosition.Y - (ApplicationPlacement?.Position.Y ?? 0)) + FormattableString.Invariant($"width:{state.CreationWidth}px;") + (ApplicationPlacement is null ? string.Empty : FormattableString.Invariant($"max-height:{Math.Max(0, ApplicationPlacement.SurfaceHeight - state.CreationPosition.Y - 8)}px;")))"
              role="group" aria-label="@Text["ElementToolbox_Create"]"
              @onpointerdown:stopPropagation @onpointerup:stopPropagation @onclick:stopPropagation @onwheel:stopPropagation
              @onkeydown="KeyDown" @onkeydown:stopPropagation>
@@ -53,6 +53,8 @@
 
 @code {
     [CascadingParameter(Name = "ModelerUICulture")] private CultureInfo? RenderCulture { get; set; }
+    [CascadingParameter(Name = "ApplicationToolbarPlacement")] private ApplicationToolbarPlacement? ApplicationPlacement { get; set; }
+    [CascadingParameter(Name = "ApplicationToolbarDismiss")] private EventCallback ApplicationDismiss { get; set; }
     [Parameter] public ElementToolboxState? State { get; set; }
     [Parameter] public EventCallback Properties { get; set; }
     [Parameter] public EventCallback<ElementToolboxState> OpenSubProcess { get; set; }
@@ -70,15 +72,17 @@
         EventCallback<ToolboxItemId> Create, EventCallback Dismiss) _previousCallbacks;
     private bool _renderRequired;
     private bool _focusConnectorActions;
+    private ApplicationToolbarPlacement? _previousApplicationPlacement;
 
     protected override void OnParametersSet()
     {
         var culture = (RenderCulture ?? CultureInfo.CurrentUICulture).Name;
         var callbacks = (Properties, OpenSubProcess, AutoPoints, Delete, Create, Dismiss);
-        _focusConnectorActions |= State is { IsConnector: true } connector &&
+        _focusConnectorActions |= ApplicationPlacement is null && State is { IsConnector: true } connector &&
             (_previousState is not { IsConnector: true } || _previousState.VisualId != connector.VisualId ||
                 _previousState.Anchor != connector.Anchor);
-        _renderRequired = State != _previousState || culture != _previousCulture || !callbacks.Equals(_previousCallbacks);
+        _renderRequired = State != _previousState || culture != _previousCulture || !callbacks.Equals(_previousCallbacks) || ApplicationPlacement != _previousApplicationPlacement;
+        _previousApplicationPlacement = ApplicationPlacement;
         _previousState = State;
         _previousCulture = culture;
         _previousCallbacks = callbacks;
@@ -107,5 +111,9 @@
             ? button : state.CanProperties ? _propertiesButton : _actionsElement).FocusAsync(preventScroll: true);
     }
     private static string Position(double x, double y) => FormattableString.Invariant($"left:{x}px;top:{y}px;");
-    private Task KeyDown(KeyboardEventArgs args) => args.Key == "Escape" ? Dismiss.InvokeAsync() : Task.CompletedTask;
+    private Task ActionKeyDown(KeyboardEventArgs args) => ApplicationPlacement is null
+        ? KeyDown(args) : Task.CompletedTask;
+    private Task KeyDown(KeyboardEventArgs args) => args.Key == "Escape"
+        ? ApplicationPlacement is null ? Dismiss.InvokeAsync() : ApplicationDismiss.InvokeAsync()
+        : Task.CompletedTask;
 }

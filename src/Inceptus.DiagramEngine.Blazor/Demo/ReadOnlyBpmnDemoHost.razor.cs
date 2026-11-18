@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using Inceptus.DiagramEngine.Bpmn.Blazor;
 using Inceptus.DiagramEngine.Bpmn.Blazor.Components;
 using Inceptus.DiagramEngine.Canvas2D.EditingSession;
@@ -14,14 +15,28 @@ namespace Inceptus.DiagramEngine.Blazor.Demo;
 /// <summary>Read-only Demo page using the supported immutable presentation and document APIs.</summary>
 public partial class ReadOnlyBpmnDemoHost
 {
+    [Parameter] public bool SimulationExamples { get; set; }
     [Parameter] public bool OrderProcess { get; set; }
+    [Parameter] public bool MessageFlow { get; set; }
+    [Parameter] public bool VerticalFlow { get; set; }
+    [Parameter] public bool DiagonalFlow { get; set; }
     [Inject] private IJSRuntime JavaScript { get; set; } = null!;
     private readonly CancellationTokenSource _lifetime = new();
     private readonly string _identity = "inspection-" + Guid.NewGuid().ToString("N");
     private DocumentSnapshot? _source;
     private BpmnModelerDisplayMode _displayMode;
     private ElementReference _settingsButton;
-    private bool _detailsOpen;
+    private bool _maintenanceEnabled;
+    private BpmnSemanticSelectionTarget? _inspectedTarget;
+    private BpmnPresentationContextStamp? _inspectionStamp;
+    internal ImmutableArray<BpmnSemanticSelectionTarget> InformationTargets =>
+        _inspectedTarget is { } target && _inspectionStamp == Presentation?.Stamp ? [target] : Presentation?.Selection ?? [];
+    internal DocumentSnapshot? InformationDocument =>
+        Presentation?.Stamp is { } stamp && Modeler?.CaptureEditorContext() is { } current &&
+        current.AttachmentVersion == stamp.AttachmentVersion && current.Document.DocumentId == stamp.DocumentId &&
+        current.Document.Revision == stamp.Revision && _source?.DocumentId == stamp.DocumentId &&
+        _source.Revision == stamp.Revision ? _source : null;
+
     private bool _disposed;
     internal InceptusBpmnModeler? Modeler { get; set; }
     internal BpmnPresentationSnapshot? Presentation { get; private set; }
@@ -33,16 +48,24 @@ public partial class ReadOnlyBpmnDemoHost
 
     protected override async Task OnInitializedAsync()
     {
-        if (OrderProcess) return;
+        if (OrderProcess || MessageFlow || VerticalFlow) return;
+        if (DiagonalFlow)
+        {
+            // This native resource already owns its saved routing. Never recover or re-author it.
+            var diagonal = await BpmnDemoStartupDocumentProvider.ReadDocumentAsync(
+                "Inceptus.DiagramEngine.Blazor.Demo.diagonal-message.inceptus.json", _lifetime.Token);
+            _source = diagonal.CaptureSnapshot();
+            return;
+        }
         var document = await BpmnPoolDemoStartupDocumentProvider.Instance.GetInitialDocumentAsync(_lifetime.Token);
         _source = document.CaptureSnapshot();
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        // The Order Process fixture needs browser font measurements before strict read-only attachment.
-        if (!firstRender || !OrderProcess || _disposed) return;
-        await LoadSampleAsync(true);
+        // Samples with relationships need browser font measurements before strict read-only attachment.
+        if (!firstRender || !(OrderProcess || MessageFlow || VerticalFlow) || _disposed) return;
+        await LoadSampleAsync(OrderProcess, MessageFlow, VerticalFlow);
         if (!_disposed) StateHasChanged();
     }
 
@@ -55,7 +78,6 @@ public partial class ReadOnlyBpmnDemoHost
         if (!_disposed) await _settingsButton.FocusAsync();
     }
 
-    private void CloseDetails() => _detailsOpen = false;
 
     private void OnReady(BpmnModelerReadyEventArgs args)
     {
@@ -75,7 +97,10 @@ public partial class ReadOnlyBpmnDemoHost
 
     private void OnSelectionChanged(BpmnSelectionChangedEventArgs args)
     {
-        if (!_disposed) Presentation = args.Presentation;
+        if (_disposed) return;
+        _inspectedTarget = null;
+        _inspectionStamp = null;
+        Presentation = args.Presentation;
     }
 
     internal void RefreshPresentation()
@@ -91,13 +116,22 @@ public partial class ReadOnlyBpmnDemoHost
             live.Presentation.Status is EditingSessionStatus.Ready or EditingSessionStatus.Rebuilding &&
             !live.Presentation.IsCurrentScenePresented) return;
         Presentation = current;
+        if (_inspectionStamp != current?.Stamp) { _inspectedTarget = null; _inspectionStamp = null; }
     }
 
     private void OnFailure(BpmnModelerOperationFailedEventArgs args)
     {
         if (_disposed) return;
         Feedback = string.Join("; ", args.Diagnostics.Select(item => item.Code + ": " + item.Message));
-        _detailsOpen = true;
+        _inspectedTarget = null;
+        _inspectionStamp = null;
+    }
+
+    private static ValueTask<IEnumerable<BpmnApplicationAction>> DiscoverNativeInspectionAsync(
+        BpmnApplicationActionContext context, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return ValueTask.FromResult<IEnumerable<BpmnApplicationAction>>([new("example:inspect", "Inspect details")]);
     }
 
     internal static async ValueTask<IEnumerable<BpmnApplicationAction>> DiscoverActionsAsync(
@@ -116,7 +150,8 @@ public partial class ReadOnlyBpmnDemoHost
             Modeler?.CapturePresentation().Stamp != args.Context.Stamp) return Task.CompletedTask;
         ApplicationDetails = $"Application inspected {args.Context.Target.Kind}: {args.Context.Target.SemanticId.Value}" +
             (args.Context.Part is { } part ? $" ({part.Kind})." : ".");
-        _detailsOpen = true;
+        _inspectedTarget = args.Context.Target;
+        _inspectionStamp = args.Context.Stamp;
         return Task.CompletedTask;
     }
 
@@ -140,7 +175,7 @@ public partial class ReadOnlyBpmnDemoHost
             return;
         }
         var result = await modeler.SetDocumentAsync(snapshot,
-            new BpmnModelerDocumentLoadOptions { VerifySavedRouting = true }, _lifetime.Token);
+            new BpmnModelerDocumentLoadOptions { VerifySavedRouting = true, ReprepareIncompatibleRouting = false }, _lifetime.Token);
         if (_disposed) return;
         if (result.Succeeded) _source = result.Snapshot;
         RefreshPresentation();
@@ -148,25 +183,33 @@ public partial class ReadOnlyBpmnDemoHost
             "The previous attachment was retained. " + string.Join("; ", result.Diagnostics.Select(item => item.Code));
     }
 
-    private async Task LoadSampleAsync(bool orderProcess)
+    private async Task LoadSampleAsync(bool orderProcess, bool messageFlow = false, bool verticalFlow = false)
     {
         if (_disposed || Busy) return;
         Busy = true;
         try
         {
-            var document = orderProcess
-                ? await BpmnDemoStartupDocumentProvider.Instance.GetInitialDocumentAsync(_lifetime.Token)
-                : await BpmnPoolDemoStartupDocumentProvider.Instance.GetInitialDocumentAsync(_lifetime.Token);
+            var document = verticalFlow
+                ? await BpmnVerticalFlowDemoStartupDocumentProvider.Instance.GetInitialDocumentAsync(_lifetime.Token)
+                : messageFlow
+                ? await BpmnMessageFlowDemoStartupDocumentProvider.Instance.GetInitialDocumentAsync(_lifetime.Token)
+                : orderProcess
+                    ? await BpmnDemoStartupDocumentProvider.Instance.GetInitialDocumentAsync(_lifetime.Token)
+                    : await BpmnPoolDemoStartupDocumentProvider.Instance.GetInitialDocumentAsync(_lifetime.Token);
             var snapshot = document.CaptureSnapshot();
-            if (orderProcess)
+            if (orderProcess || messageFlow || verticalFlow)
             {
                 // Author the built-in sample before attachment. Imported native files never use this preparation path.
-                Feedback = "Preparing the built-in Order Process sample…";
+                Feedback = verticalFlow ? "Preparing the built-in vertical Sequence Flow sample…" : messageFlow ? "Preparing the built-in Message Flow sample…" : "Preparing the built-in Order Process sample…";
                 await using var renderer = new Canvas2DRenderer(JavaScript, DemoBpmnImportPreparation.RendererConfiguration);
                 var initialized = await renderer.InitializeAsync(MeasurementId, new(1, 1, 1), _lifetime.Token);
                 if (!initialized.Succeeded) { Feedback = "Sample measurement is unavailable."; return; }
-                var prepared = await DemoBpmnImportPreparation.Create(renderer).PrepareAsync(
-                    new(snapshot, snapshot, [], [], null, false, ConnectorRoutingPreparationPurpose.RecoverSavedState), _lifetime.Token);
+                var prepared = verticalFlow
+                    ? await BpmnVerticalFlowDemoStartupDocumentProvider.PrepareAsync(snapshot, renderer, _lifetime.Token)
+                    : messageFlow
+                    ? await BpmnMessageFlowDemoStartupDocumentProvider.PrepareAsync(snapshot, renderer, _lifetime.Token)
+                    : await DemoBpmnImportPreparation.Create(renderer).PrepareAsync(
+                        new(snapshot, snapshot, [], [], null, false, ConnectorRoutingPreparationPurpose.RecoverSavedState), _lifetime.Token);
                 if (!prepared.Succeeded) { Feedback = "The built-in sample could not be prepared."; return; }
                 snapshot = new(snapshot.SemanticModel,
                     new VisualModelSnapshot(snapshot.DocumentId, snapshot.Revision, snapshot.VisualModel.VisualStates,
@@ -184,6 +227,7 @@ public partial class ReadOnlyBpmnDemoHost
     {
         if (_disposed) return;
         _disposed = true;
+        _actionExample?.Dispose();
         _lifetime.Cancel();
         _lifetime.Dispose();
         GC.SuppressFinalize(this);

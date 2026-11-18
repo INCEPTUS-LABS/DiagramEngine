@@ -1,14 +1,13 @@
 # Inceptus Diagram Engine
 
 A reusable BPMN modeler with immutable native documents and a standalone process
-presentation export. This README describes **1.1.2**, targeting **net10.0**, with
-SDK **10.0.403** for source builds. Version 1.1.2 stabilises selection-readiness
-verification in the source tests without changing modeler behavior. The source
-Demo retains editable and read-only pages with a shared application layout.
-The read-only inspection,
-semantic selection, guarded navigation and application-owned contextual action
-APIs introduced in 1.1.0 remain unchanged. Existing integrations remain editable
-by default. This documentation does not announce package availability.
+presentation export. This README describes the **1.2.0** candidate, targeting
+**net10.0**, with SDK **10.0.403** for source builds. It adds passive text/SVG
+annotations, presentation refresh and application-owned Smart toolbar and popup
+actions. The source Demo provides Editable, ReadOnly and Simulation examples.
+Native document formats and editing restrictions remain unchanged; existing
+integrations remain editable by default. This documentation does not announce
+package availability.
 
 ## Migration from DocumentEngine 0.x
 
@@ -20,7 +19,7 @@ qualified type references for Contracts, Runtime, Bpmn, Organizational, Canvas2D
 and Bpmn.Blazor. `Inceptus.Bpmn.Integration`
 retained its Package ID, assembly name and namespace at **1.0.0**;
 its public signatures expose DiagramEngine types. Do not mix the two families.
-`AddInceptusBpmnModeler()` remains in `Microsoft.Extensions.DependencyInjection`.
+DiagramEngine service registration remains in the `Microsoft.Extensions.DependencyInjection` namespace.
 
 Native `Inceptus.Document` formatVersion **2**, `Inceptus.PublishedProcess`
 formatVersion **1**, BPMN functionality, browser preference keys and execution
@@ -55,11 +54,11 @@ transitively; hosts using only editing still need only the Bpmn.Blazor reference
 ## Embed the modeler
 
 The supported hosting model is a **standalone Blazor WebAssembly application** on
-.NET 10. Use the aligned 1.1.2 family when it is available from your package source:
+.NET 10. Use the aligned 1.2.0 family when it is available from your package source:
 
 ```xml
-<PackageReference Include="Inceptus.DiagramEngine.Bpmn.Blazor" Version="1.1.2" />
-<PackageReference Include="Inceptus.Bpmn.Integration" Version="1.1.2" />
+<PackageReference Include="Inceptus.DiagramEngine.Bpmn.Blazor" Version="1.2.0" />
+<PackageReference Include="Inceptus.Bpmn.Integration" Version="1.2.0" />
 ```
 
 Register the modeler in the application's `Program.cs`. The extension namespace is `Microsoft.Extensions.DependencyInjection`:
@@ -121,10 +120,26 @@ Open `Inceptus.DiagramEngine.sln` and select `Inceptus.DiagramEngine.Blazor`, or
 `dotnet run --project src/Inceptus.DiagramEngine.Blazor -c Release` from the source
 checkout. The project uses references to the current engine source; package
 consumers use the public component and PackageReferences described above.
-The same application provides the editable Demo at `/` and read-only inspection
-at `/read-only/`, using a shared full-height layout and application styling.
-Both routes support direct navigation and refresh when the host serves the
-Blazor application entry point for client-side routes.
+The same application has three modes with shared navigation and a responsive layout:
+
+- **Editable** (`/`): BPMN modelling, native Inceptus import/export, existing BPMN
+  interchange, validation, graphical export and publication.
+- **ReadOnly** (`/read-only/`): native document viewing, automatic native selection
+  information, navigation and SVG/PNG graphical export. No document import or
+  native document export is offered.
+- **Simulation** (`/simulation/`): illustrative application-owned contextual actions,
+  composite annotations and operational information over the same ReadOnly modeler.
+  There is no simulation runtime or persistent profile configuration.
+
+The mode links form one grouped selector in the top toolbar. In Simulation,
+**Application action example** and **Annotation example** share that toolbar;
+expand them to use the examples. Expanded controls reserve space above the
+diagram and scroll on narrow screens, leaving the native information panel
+dedicated to the selected target.
+
+All routes support direct navigation and refresh when the host serves the Blazor
+application entry point for client-side routes. Switching modes creates an
+independent modeler; it does not transfer a document or change an instance's access mode.
 
 `Program.cs` selects `BpmnPoolDemoStartupDocumentProvider`: Company A has Sales
 and Warehouse Lanes, alongside independent Supplier and Supplier B Pools.
@@ -134,7 +149,7 @@ expandable subprocess and a boundary timer. Its two closely spaced branch labels
 have explicit placements; Reset label position restores automatic near-source
 placement.
 
-The Demo demonstrates activity selection, drag-preview, viewport culling, pan/zoom
+The Editable Demo demonstrates activity selection, drag-preview, viewport culling, pan/zoom
 and renderer-cache paths without opt-in settings. Select activity bodies and
 captions, move activities, use Undo/Redo, and pan or zoom the diagram. Selection
 and viewport changes remain transient; accepted edits use Commands and History.
@@ -146,24 +161,58 @@ package. Its host operations are described below.
 Open `/read-only/` in the running Demo to use
 [`ReadOnlyBpmnDemoHost`](src/Inceptus.DiagramEngine.Blazor/Demo/ReadOnlyBpmnDemoHost.razor).
 The default `/` remains editable. Existing `?example=read-only` links redirect to
-the read-only route. Its application toolbar exposes only **Settings**; the
-diagram retains selection, inspection, navigation, pan/zoom and maximise/restore.
+the read-only route. Its application toolbar offers **Settings**, **Export SVG
+Image** and **Export PNG Image**; the diagram retains selection, inspection,
+navigation, pan/zoom and maximise/restore.
 Settings are editor preferences, separate from the native document.
 
 The default sample shows **Pools and Lanes**. Open `/read-only/?sample=order` for
-the **Order Process** sample with nested Process/SubProcess navigation. Select a
-body, label, connector or header and use **Inspect details** in its context menu.
+the **Order Process** sample with nested Process/SubProcess navigation, or
+`/read-only/?sample=message` for a named **Message Flow** between the Pool sample's
+Send and Receive Tasks. `/read-only/?sample=vertical` shows a straight vertical
+Sequence Flow between Prepare and Pack; `/read-only/?sample=diagonal` shows a
+prepared native diagram with a manual diagonal Message Flow. These opt-in samples
+retain ReadOnly restrictions. Selecting a body, label, connector or header
+**automatically** displays its native identity, type and properties in the dedicated
+information panel. Relationships include their native source and target identities.
+Smart activation is not required. **Inspect details** in the context menu reveals
+that request's actual target, following the native context-menu selection rules.
 Shift+F10 or the ContextMenu key opens
 the menu from the focused canvas selection. Arrow keys, Home/End and Enter/Space
 operate the menu; disabled items explain their state; Escape dismisses it and
-restores canvas focus. The details panel is application-owned state.
+restores canvas focus. The native information panel uses immutable accepted-document
+values and stays separate from writable Properties or application operational data.
 
 The read-only page attaches an immutable native snapshot and uses the existing
 presentation and guarded navigation APIs. Inspection does not edit the document
-or enter native History. The built-in Order Process sample is prepared explicitly
+or enter native History. The built-in Order Process, Message Flow and vertical
+Sequence Flow samples are prepared explicitly
 with the existing host preparation services before attachment; this preparation
 is separate from the read-only session and is not an import recovery path.
-Changing pages disposes the previous modeler and its pending application actions.
+The diagonal sample retains its embedded saved routing and is strictly verified
+without recovery. Changing samples or pages disposes the previous modeler and its
+pending application actions.
+
+### Simulation integration example
+
+Open `/simulation/` to use the same native ReadOnly viewing host with application
+examples. The same `sample=order`, `message`, `vertical` and `diagonal` choices are
+available on this route. **Application action example** demonstrates independently
+enabled Smart toolbar actions and popup actions with guarded exact-target dispatch.
+The floating toolbar uses icons; popup items retain text and disabled explanations.
+The application-owned inspector keeps its captured target and does not edit the
+native diagram. **Annotation example** demonstrates text, SVG plus text and SVG-only
+messages, including several independent messages on each eligible element, with
+update, variant switching, removal and clear operations. Values are illustrative
+application data, not live simulation results.
+
+The Demo is a reference application, not a comprehensive test tool. Existing
+source-only controls are available through **Source Demo maintenance → Enable
+existing maintenance controls**, disabled by default. Editable exposes its generic
+application examples there; Simulation exposes their diagnostic inputs there;
+ReadOnly offers only native replacement/lifecycle maintenance. Ordinary usage does
+not require maintenance controls. There is no additional modeler access mode or
+alternative import workflow.
 
 ## Editing tools
 
@@ -247,7 +296,7 @@ Changes recompose the Scene without rearranging nodes or rerouting connectors.
 SVG, PNG and PublishedProcess capture resolved paint; execution semantics and
 native/published format versions remain unchanged.
 
-These controls and behaviours are supplied by `InceptusBpmnModeler`. Existing
+These controls and behaviours are supplied by the DiagramEngine modeler. Existing
 package hosts receive them by updating the aligned package family and retaining
 normal Razor static assets and localization setup. No host colour form, connector
 toolbox or event-name implementation is required. The source Demo's
@@ -289,7 +338,7 @@ physical-device compatibility.
 
 The modeler UI supports English (`en` / `en-GB`), Polish (`pl` / `pl-PL`), French (`fr` / `fr-FR`), German (`de` / `de-DE`) and Spanish (`es` / `es-ES`). English is the neutral resource and final fallback. Standard .NET resource resolution also supports parent fallback: `fr-CA`, `de-AT` and `es-MX` use French, German and Spanish; `en-US` and unsupported cultures such as `it-IT` use English.
 
-`CultureInfo.CurrentUICulture` is the sole culture authority. `AddInceptusBpmnModeler()` includes standard localization registration; consumers do not need internal resource types. The RCL carries its resources and satellite assemblies. There is no public `Language` or `Culture` parameter and no built-in language selector.
+`CultureInfo.CurrentUICulture` is the sole culture authority. DiagramEngine service registration includes standard localization registration; consumers do not need internal resource types. The RCL carries its resources and satellite assemblies. There is no public `Language` or `Culture` parameter and no built-in language selector.
 
 For runtime switching, change the host UI culture in its normal Blazor rendering context and re-render. A host can cascade that culture to ensure even a parameterless modeler receives the render notification:
 
@@ -317,9 +366,216 @@ The component owns its live Document, editing session, History and browser resou
 
 Callback **invocation** is ordered. Arbitrary asynchronous consumer callbacks may complete in a different order and may await subsequent modeler operations. Callback exceptions do not roll back committed changes. Track DocumentId together with revision: replacing a document can legitimately lower the revision number. Disposal and retired sessions suppress stale notifications.
 
+## Transient application decorations
+
+The 1.2.0 candidate includes a passive decoration API on the DiagramEngine modeler in both
+editable and read-only modes. This API is absent from 1.1.2 packages. The source Demo
+exposes **Annotation example** in Simulation (`/simulation/`); Editable and ReadOnly
+retain it through the opt-in maintenance area. Change the note and choose
+**Update annotations**, **Show mixed annotations**, **Clear annotations**, or **Demonstrate failure**.
+The mixed example places text-only, SVG-with-text and SVG-only messages on the same
+element. Select a message to update it, switch its variant or remove it independently. The panel
+shows the submitted revision, acceptance, result status and frame acknowledgment.
+Its reusable control and stateless provider are in
+`src/Inceptus.DiagramEngine.Blazor/Demo/DemoAnnotations.razor` and
+`DemoAnnotationProvider.cs`.
+
+The opt-in **Lifecycle verification** panel also supports normal in-app unmount/remount.
+After unmounting, **Read lifecycle observations** displays copied internal cleanup
+receipts and the exact decoration task's state at child disposal entry. This source-Demo
+aid adds no public diagnostics API. It does not force work to remain pending; an operation
+that completed before entry does not establish pending-at-disposal coverage. Normal
+modeler behavior is unchanged when verification controls are unused.
+
+Capture an opaque attachment after the component is ready, then submit increasing positive
+application revisions. The handle belongs to one component and accepted source; native
+document edits, selection and view changes do not retire it. Successful source replacement
+does, even if native IDs and revision are identical. Failed or cancelled replacement retains
+the previous accepted source and decoration input. Disposal retires the handle and callbacks.
+
+```csharp
+var attachment = modeler.CaptureDecorationAttachment();
+if (attachment is null) return; // The component has no ready attachment.
+
+var input = new Canvas2DDecorationInput(NoteProvider.Id, new NoteProvider(),
+[
+    new("owner", PropertyValue.FromText(ownerId.Value)),
+    new("text", PropertyValue.FromText("Review note"))
+]);
+var update = await modeler.ReplaceDecorationsAsync(attachment, 1, input, cancellationToken);
+// Check update.Accepted, update.Status, update.Presentation and update.Diagnostics.
+var clear = await modeler.ClearDecorationsAsync(attachment, 2, cancellationToken);
+```
+
+`Canvas2DDecorationInput` copies values into an immutable `PropertyMap`. Providers implement
+`ICanvas2DDecorationProvider` from `Inceptus.DiagramEngine.Contracts.Canvas2D`; they must be
+stateless and deterministic, reading only the supplied frozen values and native context.
+Do not capture a changing dictionary, closure, live Document, session or renderer. Submit
+a new frozen input to change application data. The callback is synchronous and must return
+promptly; cancellation cannot interrupt arbitrary application code already executing.
+
+For example, an application can annotate one explicitly identified body:
+
+```csharp
+using Inceptus.DiagramEngine.Contracts.Canvas2D;
+using Inceptus.DiagramEngine.Contracts.Geometry;
+using Inceptus.DiagramEngine.Contracts.Primitives;
+using Inceptus.DiagramEngine.Contracts.Properties;
+
+public sealed class NoteProvider : ICanvas2DDecorationProvider
+{
+    public static readonly Canvas2DSceneContributorId Id = new("my-app:notes");
+
+    public Canvas2DDecorationContent Compose(Canvas2DDecorationContext context, PropertyMap input)
+    {
+        var parts = context.FindParts(new SemanticElementId(input["owner"].TextValue),
+            Canvas2DDecorationOwnerKind.Element, Canvas2DDecorationPartKind.NodeBody);
+        if (parts.Length != 1) return Canvas2DDecorationContent.Empty;
+        var body = parts[0]; // Exactly one match; missing/ambiguous owners are omitted.
+        var bounds = new RectD(body.Item.Bounds.X, body.Item.Bounds.Bottom + 5, 180, 22);
+        const string key = "review-note";
+        return new([
+            new Canvas2DSceneItem(Canvas2DSceneObjectIdentity.ForExtension(Id, key),
+                Canvas2DSceneLayer.Decoration, 0,
+                Canvas2DSceneGeometry.Text(bounds, input["text"].TextValue), body.CreateOrigin(key),
+                clip: bounds,
+                style: new Canvas2DSceneStyle(fill: "#155e75", fontFamily: context.DefaultFontFamily),
+                hitTestPolicy: Canvas2DHitTestPolicy.None)
+        ]);
+    }
+}
+```
+
+Context contains immutable native `BaseItems` after final spatial/process placement,
+attachment/document/revision, scope/view context, base-scene generation and input revision.
+It never contains previous decorations. `Parts` and `FindParts` preserve semantic owner,
+element/relationship kind and exact body, label, connector or semantic-region part. Pool,
+Lane and Participant ownership remain distinct. Resolve by identity and exact part; omit
+missing, hidden or ambiguous matches, or return a bounded diagnostic. Item `Bounds` are
+final document coordinates; native geometry retains its item transform conventions. Do not
+apply native spatial mapping a second time. Borrowed native objects must not be retained,
+mutated or disposed.
+
+Output is an immutable `Canvas2DDecorationContent` of existing generic scene primitives,
+bounded to 10,000 items and 32 diagnostics. Every item must use the Decoration layer,
+`HitTestPolicy.None`, an extension ID from the submitted provider ID and stable source key,
+and `part.CreateOrigin(key)` for its exact visible native source part. Duplicate/colliding
+IDs, invalid origins, non-finite geometry, unconfigured fonts/images, persistent appearance,
+interaction metadata or spatial mapping contributions fail composition. Text uses the host's
+configured `DefaultFontFamily`; this initial API provides fixed-box text primitives, not a
+text-measurement callback. Providers choose explicit bounds and clips for their text; bounds
+alone do not clip drawing. Decorations
+order by Z-index and then ordinal ID, above native content and below native interaction
+feedback. They cannot become selection, editing, context-menu or command targets.
+
+The session retains the native base separately and serializes installation with rendering.
+An input-only update does not run projection, layout, routing or saved-geometry preparation,
+issue a command, advance the native revision or History, or change selection/scope/viewport.
+Native scene changes recompose the accepted input. Pan, zoom, resize, DPR and maximize use
+the native renderer and surface lifecycle. Decoration content and native base generation
+both participate in render reuse; a previous decoration frame is never accepted as current.
+
+`Canvas2DDecorationUpdateResult` separates `Accepted` from frame completion:
+
+| Status | Meaning |
+| --- | --- |
+| `Presented` | The renderer acknowledged the submitted revision against the reported native base. |
+| `Rejected` | A stale/wrong attachment, non-increasing revision or invalid SVG resource catalog was rejected before acceptance. |
+| `Unavailable` | No usable current attachment/base, an overlapping submission, or native currency/lifecycle changed during presentation. Check `Accepted`. |
+| `Cancelled` | Cancellation occurred before acceptance; the previous accepted input remains. |
+| `Superseded` | An accepted input lost currency to a later input. |
+| `Failed` | Accepted input failed composition/output validation, SVG readiness or graphics; inspect diagnostics and frame status. |
+
+`Presentation` reports attachment, document/revision, scope/view, base generation, input
+revision, `FramePresented` and `DecorationsIncluded`. Acceptance consumes the revision even
+if composition or graphics subsequently fails. Reusing a revision is not a retry: increment
+it. Only one update is admitted at a time; overlapping submissions return `Unavailable`
+without queuing input. Cancellation after acceptance does not roll back committed input and
+does not suppress truthful completion. Native changes during composition may return an
+accepted but unavailable result; applications may retry with a newer revision.
+After native view/geometry changes, read current `DecorationInputRevision`,
+`DecorationPresentation` and `DecorationDiagnostics` from
+`CaptureEditorContext()?.Presentation`; a completed submission result describes its own
+attempted frame and does not become a live status object.
+
+Newly accepted input replaces older values. A provider exception or invalid output can
+present a native-only fallback: `Failed` with `FramePresented == true` and
+`DecorationsIncluded == false`. Graphics failure does not claim the screen was updated or
+cleared. Clearing is a versioned empty input, subject to the same acknowledgment rules.
+Decoration failures are separate from native technical-import and strict-routing failures.
+
+Decorations may extend outside an owner's body, with an optional document-space clip and
+the canvas viewport. They do not enlarge native containers, extents, saved scope geometry,
+fit/content or export bounds. Adding, changing and clearing them never fits, pans or zooms.
+Graphical export and publication use the retained native presentation, so both projected
+and semantic-only decorations are excluded even far beyond native extents. This separate
+transient path does not register saved-geometry contributors or change persistence formats;
+existing strict native fixtures remain compatible.
+
+### SVG and composite messages
+
+The source API accepts immutable SVG resources alongside the same frozen decoration input.
+The existing three-argument constructor remains supported; the additional four-argument
+constructor takes a `Canvas2DDecorationResourceSet`. Acquire SVG text in application code
+before submitting it; providers do not fetch resources or perform asynchronous work.
+
+```csharp
+var resources = new Canvas2DDecorationResourceSet([
+    new Canvas2DDecorationSvgResource("my-app:status", svgText)
+]);
+var input = new Canvas2DDecorationInput(MyProvider.Id, new MyProvider(), values, resources);
+var result = await modeler.ReplaceDecorationsAsync(attachment, nextRevision, input);
+```
+
+One logical message emits one `Text` primitive, one `Image` primitive, or both. An image
+uses `Canvas2DSceneGeometry.Image(bounds, "my-app:status")`. Give each message a stable
+application ID and each child a distinct extension key, such as an unambiguous encoding
+of owner, native part, message ID and child role. Both children use the same exact native
+part origin and deterministic layout. Multiple messages can share an element; the engine
+does not impose one message per owner or create an implicit group. Submit the complete
+desired collection on each increasing revision. Reserve enough primitive slots for a whole
+message; never truncate an SVG/text pair to fit the existing 10,000-item budget.
+
+Resource references are namespaced, case-sensitive strings, at most 256 characters, with
+no whitespace. Invalid constructor arguments, duplicate references and more than 64 resources
+throw before submission. Admission validation rejects a catalog that replaces native image
+resources. Changing SVG bytes under the same reference invalidates cached artwork. Clear,
+successful source replacement and disposal retire the corresponding resource leases.
+
+The supported profile is self-contained static SVG: an `svg` root in the default SVG namespace,
+unprefixed elements, explicit positive width/height (numbers or `px`), a required four-number
+`viewBox` with positive extents, and basic `g`, `path`, `rect`, `circle`,
+`ellipse`, `line`, `polyline` and `polygon` shapes. Solid named/hex paints, basic transforms,
+opacity and stroke attributes are supported. Scripts, event handlers, CSS, external/local
+references, embedded images, fonts/text, animation, filters and `foreignObject` are rejected.
+General-purpose SVG files may need application-side conversion to this restricted profile.
+
+Limits are 64 resources, 256 KiB UTF-8 per resource, 2 MiB total, 4,096 XML elements and path
+segments per resource, 32,768 numeric values per resource, nesting depth at most 32 beneath
+the root, 32 attributes per element and 32 transforms per transform attribute. Coordinates
+must be finite with magnitude at most 1,000,000. Intrinsic dimensions are at most
+1,024 × 1,024 and 8,000,000 decoded pixels across the catalog. Catalog validation happens
+before acceptance, preserving the previous input on rejection. See the validator and its
+canonical tests for exact attribute and path syntax.
+
+All required SVG images must be ready before the combined frame is drawn; unused catalog
+entries are validated but not decoded. One ten-second preparation
+deadline covers the frame. Decode failure or timeout retains the accepted revision but
+omits **all** decorations; a successful native-only draw reports `Failed`,
+`FramePresented == true`, `DecorationsIncluded == false`. Failed native fallback never
+claims a presented frame. The failed resource input is not retried on each pan or recompose:
+submit a newer revision for an explicit retry. Late decode completion cannot install retired
+artwork. Browser decode itself is not forcibly cancellable; owned waits and resource leases
+are retired independently.
+
+The Demo uses 20-unit images, 180-unit clipped text and deterministic 28-unit rows. These
+are example layout choices, not automatic fitting or collision avoidance. Annotation geometry
+scales with native zoom; DPR is applied once by the surface. Interactive controls, annotation
+export and application form semantics remain outside this passive mechanism.
+
 ## Read-only presentation and application actions
 
-Version 1.1.0 adds `InceptusBpmnModeler.AccessMode` of type
+Version 1.1.0 adds the DiagramEngine modeler's `AccessMode` parameter of type
 `EditingSessionAccessMode` (`Inceptus.DiagramEngine.Canvas2D.EditingSession`). Its
 default is `Editable`. Set `ReadOnly` when constructing the component; changing it
 during that component's lifetime throws. Remount to choose a different access mode.
@@ -433,12 +689,117 @@ With no provider the editable context menu is unchanged; opting in adds a separa
 application group alongside native editor actions. Read-only menus contain application
 actions and permitted inspection/navigation actions.
 
-The semantic context is input-neutral and can associate an application-owned contextual
-toolbar with the selected element. `Part.Bounds` uses final Scene document coordinates;
-existing immutable `CaptureEditorContext()` viewport/surface data supports mapping them
-to canvas coordinates. The API does not provide an external floating-overlay lifecycle,
-canvas DOM origin or viewport-only change notification. No simulation toolbar, simulation
-execution or transient annotation API is included.
+### Smart contextual toolbar and popup
+
+The 1.2.0 candidate adds an engine-rendered Smart contextual toolbar alongside the popup.
+These additions are absent from `1.1.2` packages. Both presentations work in
+Editable and ReadOnly; application Smart activation is independent of native Smart Edit.
+The application owns labels, icons, applicability, handling and any editor/dialog it opens.
+The modeler supplies the control shell, positioning and guarded immutable target context.
+
+Set `ApplicationContextualActionsEnabled="true"` to enable the toolbar (default `false`).
+Disabling it leaves popup actions available. The toolbar needs one unambiguous selected
+owner; a popup uses its explicit request target, which may differ from the current selection.
+`BpmnApplicationActionContext.Target` therefore need not belong to `Presentation.Selection`.
+`Part` remains the actual hit when known; keyboard activation does not invent a pointer hit
+or substitute the internal toolbar anchor. Labels and bodies can have the same semantic
+owner, while relationships remain distinct from elements.
+
+Advance `ApplicationActionsRevision` when application policy or definitions change, even
+when the provider delegate and native selection are unchanged. It defaults to zero and
+must be nonnegative and monotonic for that component lifetime, including source replacement.
+The same revision may be retained through ordinary renders. Changes retire stale discovery
+and invocation in both presentations without native edits, layout/routing or remounting.
+Invalid revision/conflicting registrations disable application controls with bounded feedback;
+correcting the configuration restores eligible discovery. Native actions retain their rules.
+
+Use either the existing `ApplicationActionInvoked` callback or `ApplicationActionHandler`,
+never both. The optional typed handler returns `ValueTask<BpmnApplicationActionResult>`:
+
+```csharp
+private ValueTask<BpmnApplicationActionResult> InspectTyped(
+    BpmnApplicationActionInvocationEventArgs invocation)
+{
+    // Open application-owned UI for invocation.Context.Target and your own current policy.
+    // Keep native attachment/owner context and revalidate your application data before saving.
+    return ValueTask.FromResult(new BpmnApplicationActionResult(
+        BpmnModelerOperationStatus.Succeeded));
+}
+```
+
+Typed results admit `Succeeded`, `Unavailable`, `Cancelled` and `Failed`. Success completes
+the handling attempt, such as opening an editor; it does not certify a later configuration
+save. Unavailable/failed outcomes use existing `OperationFailed` feedback; declared cancellation
+does not. Null results and exceptions produce bounded failures. A typed cancellation exception
+is cancellation only when its invocation token was requested; legacy callback behavior remains
+unchanged. Attempt tokens end with completion/retirement, not with an application's modal lifetime.
+Typed diagnostics are bounded immutable values; invalid result construction is a handling failure.
+
+An optional `BpmnApplicationActionIcon` contains one static monochrome path and a `RectD` view box.
+Pass it through the additive five-argument action constructor; the original constructor is unchanged.
+The icon accepts explicit uppercase `M`, `L`, `H`, `V`, `C`, `Q`, `Z` commands with finite operands,
+at most 4,096 characters/256 commands and magnitude at most 1,000,000. View-box extents must be
+positive and finite. It is decorative encoded geometry, not SVG markup, a URL, template, image
+resource or an interactive control. The floating toolbar shows icons only, with full action names
+as accessible labels and tooltips. Actions without an icon use a generic decorative fallback.
+Popup and overflow menus keep visible action labels and disabled explanations.
+This icon contract is independent of passive composite annotation resources.
+
+Toolbar buttons keep readable CSS sizing through native pan/zoom and surface changes. Nodes
+anchor to their body, relationships to their final route midpoint and organisational representations
+to their authoritative header/body. Bounded placement and an accessible **More actions** menu
+retain all supplied actions in order. Hidden, offscreen or temporarily incoherent targets suspend
+the toolbar. Interactive controls remain separate from passive annotations and never alter native
+content, revision, History, routes, export or publication.
+
+Escape intentionally dismisses the toolbar for the current logical selection. Pan, resize and policy
+refresh do not reopen it. An application-owned **Show contextual actions** control can request it:
+
+```csharp
+var presentation = modeler.CapturePresentation();
+if (presentation.Stamp is { } stamp)
+    await modeler.RequestApplicationContextualActionsAsync(stamp, applicationRevision);
+```
+
+This operation validates both currencies and acknowledges discovery admission, not provider results
+or a rendered frame. It changes neither selection nor focus. A popup temporarily suspends an eligible
+toolbar; closure revalidates it and never undoes intentional dismissal. Popup items begin directly
+with the first action, without an application heading or leading internal separator. Separators occur
+only between actual nonempty groups; native eligibility, order and disabled explanations remain intact.
+
+The application owns dialog focus trapping and a stable application-owned return target. Invoking an
+action does not force focus back to the canvas after the handler opens its UI. See the source Demo's
+**Application action example** in both routes: Smart activation, application-only availability/revision,
+additional actions for overflow, typed/legacy handling, explicit reactivation and an application inspector.
+Its opt-in **Enable application verification controls** adds empty/missing/conflicting registrations,
+invalid application revisions with recovery, immediate typed error outcomes, and capture/replay of an
+immutable contextual request. The application outcome and the modeler's failure notifications are
+shown separately. Legacy callbacks retain their normal inspector behavior. Inside the inspector,
+verification controls can replace the current source through strict public replacement or request
+normal parent unmount while keeping the captured inspection target visible. These examples do not
+observe asynchronous managed cleanup or force pending-operation timing.
+The opt-in **Load application catalogue asynchronously** uses a same-origin HTTP read of
+`src/Inceptus.DiagramEngine.Blazor/wwwroot/demo/application-action-catalog.json` for action policy
+and inspector text. **Read application task observations** samples a bounded, application-owned
+journal of request identities, actual provider/handler and HTTP task states, cancellation and completion.
+Pending loading is nonmodal; both routes also expose strict replacement in their existing opt-in
+verification controls. Local or cached loads may finish before another interaction: a loading message
+does not prove a pending race. These observations do not expose the private dispatch queue, acknowledge
+engine acceptance or establish application work remaining pending at managed disposal entry.
+The opt-in **Application label preset** selects ordinary/catalogue English, long English or sample
+German, Spanish, French and Polish labels and disabled explanations. It advances the application
+revision for both ordinary and catalogue discovery while preserving action identities and handlers.
+The floating toolbar remains icons-only; full labels appear in accessible names, tooltips and menus.
+Independently, **Modeler UI culture** selects existing native UI resources with a normal page reload
+(`?uiCulture=en`, `de`, `es`, `fr` or `pl`, retaining the route and other query inputs). Missing,
+unsupported or repeated culture values fall back to English. Numeric formatting stays invariant.
+The active culture is shown in the panel; reloading resets Demo inputs and does not persist an
+application label preset. These are source Demo inputs, not new modeler culture parameters.
+The source Demo includes all WebAssembly globalization data to support these startup choices;
+this increases its browser download and does not change packaged modeler configuration.
+The example code is in `src/Inceptus.DiagramEngine.Blazor/Demo/DemoApplicationActions.razor` and
+`DemoApplicationActionExample.cs`. The modeler exposes no external floating-overlay lifecycle, public
+continuous geometry feed or focus-return API. Passive annotation support is described separately above.
 
 ## Editor document API and host operations
 
@@ -811,7 +1172,7 @@ Lower-layer APIs support deliberate headless or browser/session composition, wit
 
 `IBpmnModelerStartupDocumentProvider.GetInitialDocumentAsync(CancellationToken cancellationToken = default)` returns `ValueTask<Inceptus.DiagramEngine.Runtime.Documents.Document>`. This advanced startup-only seam transfers ownership of a **fresh Document per component**; it is not a live model handle, replacement callback or persistence service. Prefer `InitialDocument` for ordinary startup.
 
-The publicly generated `DocumentCanvas` and `ToolboxPanel` components are implementation-facing. Their visibility does not make them supported alternatives to `InceptusBpmnModeler`. The standalone `PublishedTokenRuntime.activateStart(startId, atMs)` method and frozen `startNodeIds` observation are advanced runtime integration surfaces; use the artifact's matching runtime. Viewer gesture helpers, `startAt` and control wiring are implementation-facing, not ordinary modeler APIs or a separate stable JavaScript SDK.
+The publicly generated `DocumentCanvas` and `ToolboxPanel` components are implementation-facing. Their visibility does not make them supported alternatives to the public DiagramEngine modeler. The standalone `PublishedTokenRuntime.activateStart(startId, atMs)` method and frozen `startNodeIds` observation are advanced runtime integration surfaces; use the artifact's matching runtime. Viewer gesture helpers, `startAt` and control wiring are implementation-facing, not ordinary modeler APIs or a separate stable JavaScript SDK.
 
 ## Support limits and release identity
 

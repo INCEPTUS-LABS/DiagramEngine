@@ -16,6 +16,10 @@ public partial class InceptusBpmnModeler : IDisposable, IBpmnDocumentEditor
     private BpmnModelerFacade? _facade;
     private DocumentCanvas? _canvas;
     private bool _disposed;
+    private BpmnLifecycleObservation? _lifecycleObservation;
+
+    internal BpmnLifecycleObservation? BeginLifecycleObservation() =>
+        _disposed ? null : _lifecycleObservation = _canvas?.BeginLifecycleObservation();
     private EditingSessionAccessMode? _initialAccessMode;
 
     /// <summary>Access policy captured once at initialization. Recreate the component to change it.</summary>
@@ -109,6 +113,7 @@ public partial class InceptusBpmnModeler : IDisposable, IBpmnDocumentEditor
 
     public void Dispose()
     {
+        _lifecycleObservation?.Evidence.Record("ModelerDisposalEntered");
         _disposed = true;
         _facade?.Dispose();
         GC.SuppressFinalize(this);
@@ -143,6 +148,7 @@ public partial class InceptusBpmnModeler : IDisposable, IBpmnDocumentEditor
             {
                 if (_disposed)
                 {
+                    (notification as BpmnApplicationActionDispatch)?.Observe(BpmnActionObservationStage.ComponentDropped);
                     return;
                 }
 

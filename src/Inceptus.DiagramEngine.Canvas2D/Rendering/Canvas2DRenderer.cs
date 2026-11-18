@@ -14,6 +14,8 @@ namespace Inceptus.DiagramEngine.Canvas2D.Rendering;
 public sealed class Canvas2DRenderer : ITextMetricsService, IAsyncDisposable
 {
     private const int TextMeasurementCacheCapacity = 2048;
+    internal const string DecorationImageLoadFailed = "CANVAS2D_DECORATION_IMAGE_LOAD_FAILED";
+    internal const string DecorationResourceTimeout = "CANVAS2D_DECORATION_RESOURCE_TIMEOUT";
     private readonly ICanvas2DRenderExecution _execution;
     private readonly Canvas2DRendererConfiguration _configuration;
     private readonly SemaphoreSlim _lifecycleGate = new(1, 1);
@@ -23,8 +25,14 @@ public sealed class Canvas2DRenderer : ITextMetricsService, IAsyncDisposable
     private bool _isDisposed;
     private Diagnostic? _disposalDiagnostic;
     private Canvas2DScene? _cachedScene;
+    private string? _cachedResourceIdentity;
+    private Canvas2DDecorationResourceSet? _preparedResourceSet;
+    private Guid _preparedAttachmentId;
+    private long _preparedInputRevision;
+    private Canvas2DDecorationFrameResources? _preparedResources;
     private long _contentVersion;
     private long _presentationVersion;
+    private long _activeDecorationContentVersion;
 
     public Canvas2DRenderer(
         IJSRuntime jsRuntime,
@@ -170,7 +178,27 @@ public sealed class Canvas2DRenderer : ITextMetricsService, IAsyncDisposable
 
     public async ValueTask<Canvas2DRendererResult> RenderAsync(
         Canvas2DScene scene,
+        CancellationToken cancellationToken = default) =>
+        await RenderCoreAsync(scene, Canvas2DDecorationResourceSet.Empty, Guid.Empty, 0, cancellationToken);
+
+    internal ValueTask<Canvas2DRendererResult> RenderAsync(
+        Canvas2DScene scene,
+        Canvas2DDecorationResourceSet resources,
+        Guid attachmentId,
+        long inputRevision,
         CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(resources);
+        return RenderCoreAsync(scene, resources, attachmentId, inputRevision, cancellationToken);
+    }
+
+    internal static bool IsDecorationResourceFailure(Canvas2DRendererResult result) =>
+        result.Status == Canvas2DRendererOperationStatus.Failed && result.Diagnostics.Length == 1 &&
+        result.Diagnostics[0].Code is DecorationImageLoadFailed or DecorationResourceTimeout;
+
+    private async ValueTask<Canvas2DRendererResult> RenderCoreAsync(
+        Canvas2DScene scene, Canvas2DDecorationResourceSet resources,
+        Guid attachmentId, long inputRevision, CancellationToken cancellationToken)
     {
         if (scene is null)
         {
@@ -197,8 +225,17 @@ public sealed class Canvas2DRenderer : ITextMetricsService, IAsyncDisposable
                 return lifecycleFailure;
             }
 
+            if (!ReferenceEquals(_preparedResourceSet, resources) || _preparedAttachmentId != attachmentId ||
+                _preparedInputRevision != inputRevision)
+            {
+                _preparedResources = Canvas2DDecorationFrameResources.Create(resources, attachmentId, inputRevision);
+                _preparedResourceSet = resources;
+                _preparedAttachmentId = attachmentId;
+                _preparedInputRevision = inputRevision;
+            }
+            var resourceIdentity = _preparedResources?.Identity;
             var presentationVersion = checked(++_presentationVersion);
-            if (CanReuseContent(scene))
+            if (CanReuseContent(scene, resourceIdentity))
             {
                 var viewport = new Canvas2DViewportFrame(
                     Canvas2DMatrixData.From(scene.ViewportTransform),
@@ -220,7 +257,7 @@ public sealed class Canvas2DRenderer : ITextMetricsService, IAsyncDisposable
             // Only a successfully acknowledged complete upload can authorize reuse.
             // Invalidate before validation/conversion too: failure must require a fresh upload.
             _cachedScene = null;
-            var imageFailure = ValidateImageResources(scene);
+            var imageFailure = ValidateImageResources(scene, resources);
             if (imageFailure is not null)
             {
                 return imageFailure;
@@ -246,7 +283,8 @@ public sealed class Canvas2DRenderer : ITextMetricsService, IAsyncDisposable
                 frame = new Canvas2DRenderFrame(scene.ViewportTransform, items,
                     checked(++_contentVersion), presentationVersion,
                     Canvas2DViewportLine.From(scene.BoundaryGuides),
-                    Canvas2DBoundedRenderItem.From(scene.BoundedPresentation), scene.BackgroundPoints);
+                    Canvas2DBoundedRenderItem.From(scene.BoundedPresentation), scene.BackgroundPoints,
+                    _preparedResources);
                 cancellationToken.ThrowIfCancellationRequested();
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -264,17 +302,24 @@ public sealed class Canvas2DRenderer : ITextMetricsService, IAsyncDisposable
             }
 #pragma warning restore CA1031
 
-            // Cancellation intentionally stops here. Once dispatched, one complete browser
-            // operation is allowed to finish so no transactional rollback semantics are implied.
+            // Public/native dispatch remains atomic. The internal decoration call receives only
+            // an owner lifetime: retirement settles preparation without awaiting a stalled decode.
+            Volatile.Write(ref _activeDecorationContentVersion,
+                frame.DecorationResources is not null ? frame.ContentVersion : 0);
+            using var registration = frame.DecorationResources is not null && cancellationToken.CanBeCanceled
+                ? cancellationToken.Register(() => _ = CancelDecorationPreparationAsync(frame.ContentVersion))
+                : default;
             var result = await InvokeInteropAsync(
                 () => _execution.RenderAsync(frame),
                 Canvas2DRendererDiagnosticCodes.RenderingFailed,
                 "Canvas2D complete-frame rendering failed.");
             _cachedScene = result.Succeeded ? scene : null;
+            _cachedResourceIdentity = result.Succeeded ? resourceIdentity : null;
             return result;
         }
         finally
         {
+            Volatile.Write(ref _activeDecorationContentVersion, 0);
             _lifecycleGate.Release();
         }
     }
@@ -529,6 +574,13 @@ public sealed class Canvas2DRenderer : ITextMetricsService, IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
+        var activePreparation = Volatile.Read(ref _activeDecorationContentVersion);
+        if (activePreparation != 0)
+        {
+            // Do not make cleanup wait on a separate best-effort interop acknowledgement.
+            // The owned render operation settles through cancellation or its preparation deadline.
+            _ = CancelDecorationPreparationAsync(activePreparation);
+        }
         await _lifecycleGate.WaitAsync();
         try
         {
@@ -541,6 +593,9 @@ public sealed class Canvas2DRenderer : ITextMetricsService, IAsyncDisposable
             Volatile.Write(ref _isInitialized, false);
             _textMeasurementCache.Clear();
             _cachedScene = null;
+            _cachedResourceIdentity = null;
+            _preparedResources = null;
+            _preparedResourceSet = null;
 #pragma warning disable CA1031 // Disposal is best effort after the public object is permanently disposed.
             try
             {
@@ -567,12 +622,15 @@ public sealed class Canvas2DRenderer : ITextMetricsService, IAsyncDisposable
     }
 
     // Session surface/currency gates serialize this observation with its renderer operations.
-    internal bool HasAcknowledgedContent(Canvas2DScene scene) => CanReuseContent(scene);
+    internal Canvas2DRendererConfiguration Configuration => _configuration;
 
-    private bool CanReuseContent(Canvas2DScene scene)
+    internal bool HasAcknowledgedContent(Canvas2DScene scene) => CanReuseContent(scene, _cachedResourceIdentity);
+
+    private bool CanReuseContent(Canvas2DScene scene, string? resourceIdentity)
     {
         var cached = _cachedScene;
-        if (cached is null || cached.RenderContent != scene.RenderContent ||
+        if (cached is null || !StringComparer.Ordinal.Equals(resourceIdentity, _cachedResourceIdentity) ||
+            cached.RenderContent != scene.RenderContent ||
             cached.DocumentId != scene.DocumentId || cached.SourceRevision != scene.SourceRevision ||
             !ReferenceEquals(cached.Configuration, scene.Configuration) ||
             cached.Viewport.Zoom != scene.Viewport.Zoom)
@@ -580,8 +638,8 @@ public sealed class Canvas2DRenderer : ITextMetricsService, IAsyncDisposable
             return false;
         }
 
-        // The readonly renderer configuration/resources and physical canvas are fixed for
-        // this initialized instance. Resize and failures clear the acknowledgment above.
+        // Native configuration and physical canvas are fixed. Decoration identity additionally
+        // proves the exact attachment, accepted input revision, and immutable resource bytes.
         // Exact array identity proves order and every immutable drawing input, without hashes.
         // A different wrapper additionally requires compatible Pan provenance so shared empty
         // arrays cannot authorize reuse across document/session/scope/profile replacements.
@@ -636,8 +694,28 @@ public sealed class Canvas2DRenderer : ITextMetricsService, IAsyncDisposable
             : null;
     }
 
-    private Canvas2DRendererResult? ValidateImageResources(Canvas2DScene scene)
+    private async Task CancelDecorationPreparationAsync(long contentVersion)
     {
+#pragma warning disable CA1031 // Retirement is best effort; the browser preparation deadline still bounds failure.
+        try
+        {
+            await _execution.CancelDecorationPreparationAsync(contentVersion);
+        }
+        catch (Exception exception) when (IsNonFatal(exception))
+        {
+            // No exception detail or competing completion escapes the owner lifetime callback.
+        }
+#pragma warning restore CA1031
+    }
+
+    private Canvas2DRendererResult? ValidateImageResources(
+        Canvas2DScene scene, Canvas2DDecorationResourceSet resources)
+    {
+        if (resources.SvgImages.Keys.Any(_configuration.ImageResources.ContainsKey))
+        {
+            return Failure(Canvas2DRendererDiagnosticCodes.InvalidScene,
+                "Decoration image resources cannot replace configured native image resources.");
+        }
         foreach (var item in scene.Items)
         {
             if (!item.IsVisible || item.Geometry.Kind != Canvas2DSceneGeometryKind.Image)
@@ -646,7 +724,8 @@ public sealed class Canvas2DRenderer : ITextMetricsService, IAsyncDisposable
             }
 
             var imageReference = item.Geometry.Content!;
-            if (!_configuration.ImageResources.ContainsKey(imageReference))
+            if (!_configuration.ImageResources.ContainsKey(imageReference) &&
+                !resources.SvgImages.ContainsKey(imageReference))
             {
                 return Failure(
                     Canvas2DRendererDiagnosticCodes.MissingImageResource,
@@ -735,6 +814,8 @@ public sealed class Canvas2DRenderer : ITextMetricsService, IAsyncDisposable
         Canvas2DRendererDiagnosticCodes.Disposed => code,
         Canvas2DRendererDiagnosticCodes.ResizeFailed => code,
         Canvas2DRendererDiagnosticCodes.ImageLoadFailed => code,
+        DecorationImageLoadFailed => code,
+        DecorationResourceTimeout => code,
         Canvas2DRendererDiagnosticCodes.RenderingFailed => code,
         _ => fallbackCode,
     };
@@ -753,6 +834,10 @@ public sealed class Canvas2DRenderer : ITextMetricsService, IAsyncDisposable
             "Canvas2D canvas resizing failed.",
         Canvas2DRendererDiagnosticCodes.ImageLoadFailed =>
             "A configured Canvas2D image resource could not be loaded.",
+        DecorationImageLoadFailed =>
+            "A transient decoration SVG image could not be decoded.",
+        DecorationResourceTimeout =>
+            "Transient decoration resource preparation exceeded its deadline.",
         Canvas2DRendererDiagnosticCodes.RenderingFailed =>
             "Canvas2D complete-frame rendering failed.",
         _ => fallbackMessage,

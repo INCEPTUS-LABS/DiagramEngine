@@ -320,6 +320,37 @@ public sealed class CanvasPresentationPointerObserverTests
         Assert.Equal(0, invocations);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task LifecycleReceiptPreservesEachSilentObserverCleanupFailure(bool surface)
+    {
+        var evidence = new Inceptus.DiagramEngine.Canvas2D.EditingSession.LifecycleObservation(Guid.NewGuid());
+        var browser = new RecordingJsObjectReference((name, _) => name == "dispose"
+            ? throw new InvalidOperationException("browser cleanup") : null, throwOnDispose: true);
+        var module = new RecordingJsObjectReference((_, _) => browser, throwOnDispose: true);
+        var runtime = new RecordingJsRuntime(module);
+        if (surface)
+        {
+            var observer = Assert.IsType<CanvasPresentationSurfaceObserver>(await new CanvasPresentationSurfaceObserverFactory(runtime)
+                .CreateAsync("container", _ => Task.CompletedTask, CancellationToken.None));
+            observer.LifecycleObservation = evidence;
+            await observer.DisposeAsync();
+        }
+        else
+        {
+            var observer = Assert.IsType<CanvasPresentationPointerObserver>(await new CanvasPresentationPointerObserverFactory(runtime)
+                .CreateAsync("canvas", _ => Task.CompletedTask, _ => Task.CompletedTask, CancellationToken.None));
+            observer.LifecycleObservation = evidence;
+            await observer.DisposeAsync();
+        }
+        var events = evidence.Read().Events;
+        Assert.Equal(3, events.Count(e => e.Failure));
+        Assert.Contains(events, e => e.Stage == (surface ? "SurfaceCallbackRetired" : "PointerCallbackRetired"));
+        Assert.Equal(1, browser.DisposeCount);
+        Assert.Equal(1, module.DisposeCount);
+    }
+
     private sealed class RecordingJsRuntime(IJSObjectReference module) : IJSRuntime
     {
         internal List<string> Identifiers { get; } = [];
@@ -339,7 +370,7 @@ public sealed class CanvasPresentationPointerObserverTests
     }
 
     private sealed class RecordingJsObjectReference(
-        Func<string, object?[], object?>? resultFactory = null) : IJSObjectReference
+        Func<string, object?[], object?>? resultFactory = null, bool throwOnDispose = false) : IJSObjectReference
     {
         internal List<(string Identifier, object?[] Arguments)> Invocations { get; } = [];
 
@@ -363,6 +394,7 @@ public sealed class CanvasPresentationPointerObserverTests
         public ValueTask DisposeAsync()
         {
             DisposeCount++;
+            if (throwOnDispose) throw new InvalidOperationException("reference cleanup");
             return ValueTask.CompletedTask;
         }
     }

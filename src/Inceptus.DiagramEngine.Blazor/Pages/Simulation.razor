@@ -1,0 +1,16 @@
+@page "/simulation/"
+@namespace Inceptus.DiagramEngine.Blazor.Pages
+@using Microsoft.AspNetCore.Components
+@using Inceptus.DiagramEngine.Blazor.Demo
+
+<ReadOnlyBpmnDemoHost SimulationExamples="true" @key="(OrderProcess, MessageFlow, VerticalFlow, DiagonalFlow)" OrderProcess="OrderProcess" MessageFlow="MessageFlow"
+    VerticalFlow="VerticalFlow" DiagonalFlow="DiagonalFlow" />
+
+@code {
+    [SupplyParameterFromQuery(Name = "sample")] public string? Sample { get; set; }
+
+    private bool OrderProcess => string.Equals(Sample, "order", StringComparison.Ordinal);
+    private bool VerticalFlow => string.Equals(Sample, "vertical", StringComparison.Ordinal);
+    private bool DiagonalFlow => string.Equals(Sample, "diagonal", StringComparison.Ordinal);
+    private bool MessageFlow => string.Equals(Sample, "message", StringComparison.Ordinal);
+}

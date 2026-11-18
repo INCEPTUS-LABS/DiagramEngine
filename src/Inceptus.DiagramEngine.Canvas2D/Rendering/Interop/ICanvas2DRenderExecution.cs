@@ -20,6 +20,9 @@ internal interface ICanvas2DRenderExecution : IAsyncDisposable
     ValueTask<Canvas2DInteropOperationResult> RenderAsync(
         Canvas2DRenderFrame frame);
 
+    // Only the session-owned decoration lifetime may retire dispatched preparation.
+    ValueTask CancelDecorationPreparationAsync(long contentVersion) => ValueTask.CompletedTask;
+
     ValueTask<Canvas2DInteropOperationResult> RenderViewportAsync(
         Canvas2DViewportFrame frame);
 

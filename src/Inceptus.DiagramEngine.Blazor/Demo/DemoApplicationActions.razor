@@ -1,0 +1,104 @@
+@namespace Inceptus.DiagramEngine.Blazor.Demo
+@using Microsoft.AspNetCore.Components.Web
+@implements IDisposable
+
+<details class="demo-application-actions" @onpointerdown:stopPropagation @onwheel:stopPropagation>
+    <summary @ref="_fallback">Application action example</summary>
+    <p>The application owns these actions and this inspector. Smart activation controls the toolbar only.</p>
+    <label><input type="checkbox" data-application-example-control="smart" checked="@Example.ToolbarEnabled" @onchange="ToggleToolbarAsync" /> Smart contextual actions</label>
+    <label><input type="checkbox" data-application-example-control="availability" checked="@Example.InspectAvailable" @onchange="ToggleAvailabilityAsync" /> Inspection available</label>
+    <label><input type="checkbox" data-application-example-control="additional" checked="@Example.AdditionalActions" @onchange="ToggleAdditionalAsync" /> Additional sample actions</label>
+    <label><input type="checkbox" data-application-example-control="typed" checked="@Example.UseTypedHandler" @onchange="ToggleHandlerAsync" /> Use typed handler</label>
+    <button type="button" disabled="@(!Example.ToolbarEnabled)" @onclick="Example.ReactivateAsync">Show contextual actions</button>
+    <p role="status" data-application-example-revision="@Example.Revision" data-application-example-invocations="@Example.InvocationCount">Smart toolbar @(Example.ToolbarEnabled ? "enabled" : "off"). @Example.Feedback
+        @if (Maintenance) { <text> · Application revision @Example.Revision · Invocations @Example.InvocationCount</text> }</p>
+</details>
+@if (Example.DialogOpen)
+{
+    <div class="application-inspector-backdrop" @onpointerdown:stopPropagation @onwheel:stopPropagation @onclick:stopPropagation>
+        <section class="application-inspector" role="dialog" aria-modal="true" aria-label="Application inspection details"
+                 @onkeydown="HandleDialogKeyAsync" @onkeydown:stopPropagation @oncontextmenu:preventDefault>
+            <span tabindex="0" class="focus-boundary" @onfocus="FocusLastAsync"></span>
+            <h2>Application inspection details</h2>
+            <p>@Example.Details</p>
+            <p>This application inspector keeps the captured target. It does not edit the native diagram.</p>
+            <button @ref="_close" type="button" @onclick="CloseAsync">Close application inspector</button>
+            @if (Maintenance && Example.VerificationEnabled)
+            {
+                <DemoApplicationInspectorVerification @ref="_inspectorVerification" Example="Example" CanUnmount="CanUnmount"
+                    UnmountRequested="UnmountRequested" BeforeOperation="FocusCloseAsync" Changed="Changed" />
+            }
+            <span tabindex="0" class="focus-boundary" @onfocus="FocusCloseAsync"></span>
+        </section>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public DemoApplicationActionExample Example { get; set; } = null!;
+    [Parameter] public bool Maintenance { get; set; }
+    [Parameter] public EventCallback Changed { get; set; }
+    [Parameter] public bool CanUnmount { get; set; }
+    [Parameter] public EventCallback UnmountRequested { get; set; }
+    private DemoApplicationActionExample? _subscribed;
+    private ElementReference _fallback;
+    private ElementReference _close;
+    private DemoApplicationInspectorVerification? _inspectorVerification;
+    private bool _focusPending;
+    private bool _dialogWasOpen;
+    private bool _disposed;
+
+    protected override void OnParametersSet()
+    {
+        if (ReferenceEquals(_subscribed, Example)) return;
+        if (_subscribed is not null) _subscribed.Changed -= Refresh;
+        _subscribed = Example;
+        Example.Changed += Refresh;
+    }
+
+    private void Refresh()
+    {
+        if (_disposed) return;
+        _focusPending = Example.DialogOpen && !_dialogWasOpen;
+        _dialogWasOpen = Example.DialogOpen;
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!_focusPending || _disposed || !Example.DialogOpen) return;
+        _focusPending = false;
+        await _close.FocusAsync();
+    }
+
+    private Task ToggleToolbarAsync(ChangeEventArgs args) { Example.ToolbarEnabled = args.Value is true; return Changed.InvokeAsync(); }
+    private Task ToggleAvailabilityAsync(ChangeEventArgs args) { Example.SetAvailability(args.Value is true); return Changed.InvokeAsync(); }
+    private Task ToggleAdditionalAsync(ChangeEventArgs args) { Example.SetAdditionalActions(args.Value is true); return Changed.InvokeAsync(); }
+    private Task ToggleHandlerAsync(ChangeEventArgs args) { Example.UseTypedHandler = args.Value is true; return Changed.InvokeAsync(); }
+
+    private async Task CloseAsync()
+    {
+        Example.CloseDialog();
+        // Stable application-owned fallback, including when the modeler/old invoker was retired.
+        await _fallback.FocusAsync();
+    }
+
+    private async Task HandleDialogKeyAsync(KeyboardEventArgs args)
+    {
+        if (args.Key == "Escape") await CloseAsync();
+    }
+
+    private async Task FocusCloseAsync() => await _close.FocusAsync();
+
+    private async Task FocusLastAsync()
+    {
+        if (Example.VerificationEnabled && _inspectorVerification is not null && await _inspectorVerification.FocusLastAsync()) return;
+        await FocusCloseAsync();
+    }
+
+    public void Dispose()
+    {
+        _disposed = true;
+        if (_subscribed is not null) _subscribed.Changed -= Refresh;
+        GC.SuppressFinalize(this);
+    }
+}

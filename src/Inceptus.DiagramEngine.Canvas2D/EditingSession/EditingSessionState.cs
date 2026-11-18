@@ -87,7 +87,10 @@ public sealed class EditingSessionState
         PresentationViewContext? presentationContext = null,
         PresentationViewPlan? presentationPlan = null,
         ImmutableArray<VisualStateId> selectionOrder = default,
-        EditingSessionAccessMode accessMode = EditingSessionAccessMode.Editable)
+        EditingSessionAccessMode accessMode = EditingSessionAccessMode.Editable,
+        long decorationInputRevision = 0,
+        Canvas2DDecorationPresentation? decorationPresentation = null,
+        IEnumerable<Diagnostic>? decorationDiagnostics = null)
     {
         ArgumentNullException.ThrowIfNull(documentId);
         ArgumentNullException.ThrowIfNull(activeScopeId);
@@ -167,6 +170,10 @@ public sealed class EditingSessionState
             isCurrentScenePresented;
         IsPanPresentationPending = isPanPresentationPending;
         AccessMode = accessMode;
+        DecorationInputRevision = decorationInputRevision;
+        DecorationPresentation = decorationPresentation;
+        DecorationDiagnostics = EditingSessionDiagnosticCollection.CopyAndOrder(decorationDiagnostics,
+            nameof(decorationDiagnostics));
     }
 
     public DocumentId DocumentId { get; }
@@ -217,6 +224,15 @@ public sealed class EditingSessionState
     public ImmutableArray<Diagnostic> PresentationDiagnostics { get; }
 
     public bool IsClosed { get; }
+
+    /// <summary>Last accepted application revision. Zero means no input has been submitted.</summary>
+    public long DecorationInputRevision { get; }
+
+    /// <summary>Current native-base/decoration frame observation, separate from input acceptance.</summary>
+    public Canvas2DDecorationPresentation? DecorationPresentation { get; }
+
+    /// <summary>Bounded transient composition failures, never native pipeline/import failures.</summary>
+    public ImmutableArray<Diagnostic> DecorationDiagnostics { get; }
 
     /// <summary>
     /// True only after graphics execution for the current scene generation succeeds.

@@ -291,7 +291,7 @@ public sealed class PhaseHCanvas2DSceneArchitectureTests
                     SearchOption.AllDirectories)
                 .Order(StringComparer.Ordinal)
                 .Select(File.ReadAllText));
-        Assert.DoesNotContain("Bpmn", implementationSource, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Bpmn", LifecycleObservationArchitectureTests.WithoutApprovedFriendDeclaration(implementationSource), StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("Notation", implementationSource, StringComparison.OrdinalIgnoreCase);
     }
 

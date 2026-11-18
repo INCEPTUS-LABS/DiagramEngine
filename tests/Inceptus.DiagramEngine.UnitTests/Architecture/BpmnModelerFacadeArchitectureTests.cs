@@ -2,6 +2,8 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 using Inceptus.DiagramEngine.Bpmn.Blazor;
 using Inceptus.DiagramEngine.Bpmn.Blazor.Components;
+using Inceptus.DiagramEngine.Canvas2D.EditingSession;
+using Inceptus.DiagramEngine.Contracts.Canvas2D;
 using Inceptus.DiagramEngine.Contracts.Documents;
 using Inceptus.DiagramEngine.Runtime.Documents;
 using Microsoft.AspNetCore.Components;
@@ -33,7 +35,12 @@ public sealed class BpmnModelerFacadeArchitectureTests
         typeof(BpmnSelectionChangedEventArgs),
         typeof(BpmnApplicationAction),
         typeof(BpmnApplicationActionContext),
+        typeof(BpmnApplicationActionIcon),
+        typeof(BpmnApplicationActionResult),
         typeof(BpmnApplicationActionInvocationEventArgs),
+        typeof(BpmnDecorationAttachment),
+        typeof(Canvas2DDecorationUpdateResult),
+        typeof(Canvas2DDecorationPresentation),
     ];
 
     [Fact]
@@ -54,6 +61,10 @@ public sealed class BpmnModelerFacadeArchitectureTests
             parameters[nameof(InceptusBpmnModeler.ApplicationActionProvider)].PropertyType);
         Assert.Equal(typeof(EventCallback<BpmnApplicationActionInvocationEventArgs>),
             parameters[nameof(InceptusBpmnModeler.ApplicationActionInvoked)].PropertyType);
+        Assert.Equal(typeof(BpmnApplicationActionHandler),
+            parameters[nameof(InceptusBpmnModeler.ApplicationActionHandler)].PropertyType);
+        Assert.Equal(typeof(bool), parameters[nameof(InceptusBpmnModeler.ApplicationContextualActionsEnabled)].PropertyType);
+        Assert.Equal(typeof(long), parameters[nameof(InceptusBpmnModeler.ApplicationActionsRevision)].PropertyType);
         Assert.Equal(typeof(string), parameters[nameof(InceptusBpmnModeler.Class)].PropertyType);
         Assert.Equal(typeof(string), parameters[nameof(InceptusBpmnModeler.Style)].PropertyType);
         Assert.Equal(typeof(BpmnModelerDisplayMode), parameters[nameof(InceptusBpmnModeler.DisplayMode)].PropertyType);
@@ -75,25 +86,31 @@ public sealed class BpmnModelerFacadeArchitectureTests
         Assert.Equal(typeof(ValueTask<IEnumerable<BpmnApplicationAction>>), provider.ReturnType);
         Assert.Equal([typeof(BpmnApplicationActionContext), typeof(CancellationToken)],
             provider.GetParameters().Select(static parameter => parameter.ParameterType));
+        var handler = typeof(BpmnApplicationActionHandler).GetMethod("Invoke")!;
+        Assert.Equal(typeof(ValueTask<BpmnApplicationActionResult>), handler.ReturnType);
+        Assert.Equal([typeof(BpmnApplicationActionInvocationEventArgs)],
+            handler.GetParameters().Select(static parameter => parameter.ParameterType));
 
         var contextProperties = typeof(BpmnApplicationActionContext).GetProperties(PublicDeclared)
             .ToDictionary(static property => property.Name, static property => property.PropertyType);
-        Assert.Equal(["Part", "Presentation", "RequestVersion", "Stamp", "Target"],
+        Assert.Equal(["ApplicationActionsRevision", "Part", "Presentation", "RequestVersion", "Stamp", "Target"],
             contextProperties.Keys.Order(StringComparer.Ordinal));
         Assert.Equal(typeof(BpmnPresentationSnapshot), contextProperties["Presentation"]);
         Assert.Equal(typeof(BpmnPresentationContextStamp), contextProperties["Stamp"]);
         Assert.Equal(typeof(BpmnSemanticSelectionTarget), contextProperties["Target"]);
         Assert.Equal(typeof(BpmnPresentationPart), contextProperties["Part"]);
         Assert.Equal(typeof(long), contextProperties["RequestVersion"]);
+        Assert.Equal(typeof(long), contextProperties["ApplicationActionsRevision"]);
 
         var descriptorProperties = typeof(BpmnApplicationAction).GetProperties(PublicDeclared)
             .ToDictionary(static property => property.Name, static property => property.PropertyType);
-        Assert.Equal(["DisabledExplanation", "Id", "IsEnabled", "Label"],
+        Assert.Equal(["DisabledExplanation", "Icon", "Id", "IsEnabled", "Label"],
             descriptorProperties.Keys.Order(StringComparer.Ordinal));
         Assert.Equal(typeof(string), descriptorProperties["Id"]);
         Assert.Equal(typeof(string), descriptorProperties["Label"]);
         Assert.Equal(typeof(bool), descriptorProperties["IsEnabled"]);
         Assert.Equal(typeof(string), descriptorProperties["DisabledExplanation"]);
+        Assert.Equal(typeof(BpmnApplicationActionIcon), descriptorProperties["Icon"]);
 
         var invocationProperties = typeof(BpmnApplicationActionInvocationEventArgs).GetProperties(PublicDeclared)
             .ToDictionary(static property => property.Name, static property => property.PropertyType);
@@ -117,6 +134,11 @@ public sealed class BpmnModelerFacadeArchitectureTests
         AssertMethod(nameof(InceptusBpmnModeler.SetDocumentAsync), typeof(ValueTask<BpmnModelerDocumentResult>), typeof(DocumentSnapshot), typeof(CancellationToken));
         AssertMethod(nameof(InceptusBpmnModeler.SetDocumentAsync), typeof(ValueTask<BpmnModelerDocumentResult>), typeof(DocumentSnapshot), typeof(BpmnModelerDocumentLoadOptions), typeof(CancellationToken));
         AssertMethod(nameof(InceptusBpmnModeler.AcknowledgeNativeSave), typeof(bool), typeof(BpmnModelerSaveCheckpoint));
+        AssertMethod(nameof(InceptusBpmnModeler.CaptureDecorationAttachment), typeof(BpmnDecorationAttachment));
+        AssertMethod(nameof(InceptusBpmnModeler.ReplaceDecorationsAsync), typeof(ValueTask<Canvas2DDecorationUpdateResult>),
+            typeof(BpmnDecorationAttachment), typeof(long), typeof(Canvas2DDecorationInput), typeof(CancellationToken));
+        AssertMethod(nameof(InceptusBpmnModeler.ClearDecorationsAsync), typeof(ValueTask<Canvas2DDecorationUpdateResult>),
+            typeof(BpmnDecorationAttachment), typeof(long), typeof(CancellationToken));
         Assert.Equal(typeof(BpmnModelerNativeSaveStatus), typeof(InceptusBpmnModeler)
             .GetProperty(nameof(InceptusBpmnModeler.NativeSaveStatus))!.PropertyType);
         Assert.Null(typeof(InceptusBpmnModeler).GetMethod("ImportNativeDocumentAsync"));
@@ -139,6 +161,11 @@ public sealed class BpmnModelerFacadeArchitectureTests
         Assert.Contains(typeof(DocumentSnapshot), visited);
         Assert.Contains(typeof(BpmnModelerFileArtifact), visited);
         Assert.Contains(typeof(BpmnModelerDocumentChangedEventArgs), visited);
+        Assert.Contains(typeof(BpmnDecorationAttachment), visited);
+        Assert.Contains(typeof(Canvas2DDecorationInput), visited);
+        Assert.Contains(typeof(Canvas2DDecorationUpdateResult), visited);
+        Assert.Contains(typeof(Canvas2DDecorationPresentation), visited);
+        Assert.Contains(typeof(Canvas2DDecorationUpdateStatus), visited);
         Assert.DoesNotContain(typeof(IBpmnModelerStartupDocumentProvider), visited);
     }
 
@@ -232,7 +259,13 @@ public sealed class BpmnModelerFacadeArchitectureTests
         Type[] immutablePresentationData =
         [typeof(Inceptus.DiagramEngine.Canvas2D.Publishing.EditingSessionPresentationCaptureResult),
          typeof(Inceptus.DiagramEngine.Canvas2D.Interaction.Canvas2DInteractionResult),
-         typeof(Inceptus.DiagramEngine.Canvas2D.EditingSession.EditingSessionAccessMode)];
+         typeof(EditingSessionAccessMode),
+         // Exact immutable decoration observations, not the live EditingSession or renderer.
+         // The result and nested presentation also participate in FacadePayloads traversal
+         // and the read-only-property check above.
+         typeof(Canvas2DDecorationUpdateResult),
+         typeof(Canvas2DDecorationPresentation),
+         typeof(Canvas2DDecorationUpdateStatus)];
         Assert.False(typeNamespace.StartsWith("Inceptus.DiagramEngine.Canvas2D", StringComparison.Ordinal) &&
             !immutablePresentationData.Contains(type),
             $"The ordinary facade exposes Canvas2D runtime type {type.FullName}.");

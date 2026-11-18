@@ -140,6 +140,7 @@ public sealed partial class DocumentCanvasHostTests
         var activator = new DemoPublishComponentActivator(host);
         using var services = new ServiceCollection()
             .AddLogging().AddInceptusBpmnModeler()
+            .AddSingleton(_ => new HttpClient { BaseAddress = new Uri("https://demo.invalid/") })
             .AddSingleton<IJSRuntime>(new PublishDownloadRuntime())
             .AddSingleton<IComponentActivator>(activator)
             .BuildServiceProvider();
@@ -1147,6 +1148,7 @@ public sealed partial class DocumentCanvasHostTests
         IComponentActivator activator, PublishDownloadRuntime browser) =>
         new ServiceCollection()
             .AddLogging().AddInceptusBpmnModeler()
+            .AddSingleton(_ => new HttpClient { BaseAddress = new Uri("https://demo.invalid/") })
             .AddSingleton<IJSRuntime>(browser)
             .AddSingleton<IComponentActivator>(activator)
             .BuildServiceProvider();

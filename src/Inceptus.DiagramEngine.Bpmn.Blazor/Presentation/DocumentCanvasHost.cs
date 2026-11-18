@@ -2416,7 +2416,8 @@ internal sealed partial class DocumentCanvasHost : IAsyncDisposable, IBpmnDocume
                 !_disposed && _initialized && !_propertiesFormOpen && !_modelViewPropertiesFormOpen &&
                     _session is not null && sessionState is not null && TryArrangeScopes(_session, sessionState, out _, out _),
                 CaptureElementToolbox(sessionState),
-                _smartEditEnabled);
+                _smartEditEnabled,
+                _surfaceRenderPending);
         }
     }
 
@@ -2627,7 +2628,7 @@ internal sealed partial class DocumentCanvasHost : IAsyncDisposable, IBpmnDocume
 
     public ValueTask DisposeAsync()
     {
-        Task task;
+        TaskCompletionSource completion;
         lock (_sync)
         {
             if (_disposeTask is not null)
@@ -2635,17 +2636,38 @@ internal sealed partial class DocumentCanvasHost : IAsyncDisposable, IBpmnDocume
                 return new ValueTask(_disposeTask);
             }
 
+            // Publish one completion before cleanup can invoke a callback or reenter disposal.
+            completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            _disposeTask = completion.Task;
             _disposed = true;
             RetireApplicationActionsUnderLock();
             ModelerNotifications?.Dispose();
             _documentNotifications?.Dispose();
+            _lifecycleObservation?.Evidence.Record("NotificationsRetired");
             _viewportPanGesture = null;
             _touchPlacementPress = null;
-            _lifetime.Cancel();
-            _disposeTask = task = DisposeCoreAsync();
         }
 
-        return new ValueTask(task);
+        // A session notification owns its notification gate before acquiring _sync.
+        // Synchronously completing observer cleanup must not carry _sync into session Close.
+        _ = CompleteDisposalAsync(completion);
+        return new ValueTask(completion.Task);
+    }
+
+    private async Task CompleteDisposalAsync(TaskCompletionSource completion)
+    {
+        try
+        {
+            _lifetime.Cancel();
+            await DisposeCoreAsync().ConfigureAwait(false);
+            completion.TrySetResult();
+        }
+#pragma warning disable CA1031 // All callers observe unexpected cleanup faults through the shared task.
+        catch (Exception exception)
+        {
+            completion.TrySetException(exception);
+        }
+#pragma warning restore CA1031
     }
 
     private async ValueTask UpdateToolboxPlacementAsync(
@@ -2978,6 +3000,8 @@ internal sealed partial class DocumentCanvasHost : IAsyncDisposable, IBpmnDocume
 
                 session = _session;
                 _surfaceSize = surfaceSize;
+                // Positional application popups need a new explicit request after a surface change.
+                if (_contextMenu?.ApplicationContext is not null) CloseContextMenuUnderLock();
                 if (_contextMenu is { } contextMenu)
                 {
                     _contextMenu = contextMenu.ApplicationContext is not null
@@ -3138,6 +3162,7 @@ internal sealed partial class DocumentCanvasHost : IAsyncDisposable, IBpmnDocume
                 try
                 {
                     await _pointerObserver.DisposeAsync().ConfigureAwait(false);
+                    _lifecycleObservation?.Evidence.Record("PointerDisposed");
                 }
 #pragma warning disable CA1031 // Session cleanup must continue after observer cleanup failure.
                 catch (Exception exception) when (IsNonFatal(exception))
@@ -3159,6 +3184,7 @@ internal sealed partial class DocumentCanvasHost : IAsyncDisposable, IBpmnDocume
                 try
                 {
                     await _interactionController.DisposeAsync().ConfigureAwait(false);
+                    _lifecycleObservation?.Evidence.Record("InteractionDisposed");
                 }
 #pragma warning disable CA1031 // Session cleanup must continue after interaction cleanup failure.
                 catch (Exception exception) when (IsNonFatal(exception))
@@ -3181,6 +3207,7 @@ internal sealed partial class DocumentCanvasHost : IAsyncDisposable, IBpmnDocume
                 try
                 {
                     await _observer.DisposeAsync().ConfigureAwait(false);
+                    _lifecycleObservation?.Evidence.Record("SurfaceDisposed");
                 }
 #pragma warning disable CA1031 // Session cleanup must continue after observer cleanup failure.
                 catch (Exception exception) when (IsNonFatal(exception))
@@ -3203,6 +3230,7 @@ internal sealed partial class DocumentCanvasHost : IAsyncDisposable, IBpmnDocume
                 try
                 {
                     await _session.DisposeAsync().ConfigureAwait(false);
+                    _lifecycleObservation?.Evidence.Record("SessionDisposed");
                 }
 #pragma warning disable CA1031 // Host disposal records but does not reclassify session cleanup failure.
                 catch (Exception exception) when (IsNonFatal(exception))
@@ -3797,10 +3825,10 @@ internal sealed partial class DocumentCanvasHost : IAsyncDisposable, IBpmnDocume
                 if (input.Kind is CanvasPointerEventKind.Up or CanvasPointerEventKind.ContextMenu or CanvasPointerEventKind.DoubleClick)
                     RecordPrimaryPresentationPartUnderLock(result);
                 if (input.Kind == CanvasPointerEventKind.ContextMenu && result.Succeeded &&
-                    result.TargetId is { } actionPart && CapturePresentation().PrimaryPart?.SceneObjectId == actionPart)
+                    result.TargetId is { } actionPart)
                 {
-                    applicationDiscovery = PrepareApplicationActionsUnderLock(
-                        new PointD(input.ClientX - input.CanvasLeft, input.ClientY - input.CanvasTop));
+                    applicationDiscovery = PrepareApplicationActionsForHitUnderLock(
+                        new PointD(input.ClientX - input.CanvasLeft, input.ClientY - input.CanvasTop), actionPart);
                     notify |= applicationDiscovery is not null;
                 }
                 notify |= result.IsCompletedSelectionClick;
@@ -4429,6 +4457,7 @@ internal sealed partial class DocumentCanvasHost : IAsyncDisposable, IBpmnDocume
                 return;
             }
 
+            var applicationToolbarWasVisible = _applicationToolbar is not null;
             ObservePresentationUnderLock(eventArgs.State);
             ObserveApplicationActionsUnderLock(eventArgs.State);
             deferPlacementPreviewNotification = CanDeferPlacementPreviewNotification(eventArgs.State);
@@ -4439,7 +4468,7 @@ internal sealed partial class DocumentCanvasHost : IAsyncDisposable, IBpmnDocume
 
             // Every notification still reconciles host state. Only this explicitly proven
             // Pan generation may omit an intermediate surrounding-editor render.
-            if (eventArgs.State.IsPanPresentationPending && _initialized &&
+            if (eventArgs.State.IsPanPresentationPending && _initialized && !applicationToolbarWasVisible &&
                 _observedDocumentRevision == eventArgs.State.DocumentRevision &&
                 _hostDiagnostics.IsEmpty && _interactionDiagnostics.IsEmpty &&
                 _contextMenu is null && !_propertiesFormOpen && !_modelViewPropertiesFormOpen &&
@@ -4537,7 +4566,7 @@ internal sealed partial class DocumentCanvasHost : IAsyncDisposable, IBpmnDocume
                  contextMenu.Kind == DocumentCanvasContextMenuKind.Background &&
                  (contextMenu.SessionGeneration != eventArgs.State.Generation ||
                   !ReferenceEquals(contextMenu.SourceScene, eventArgs.State.CurrentScene)) ||
-                  contextMenu.Kind == DocumentCanvasContextMenuKind.Element &&
+                  contextMenu.Kind == DocumentCanvasContextMenuKind.Element && contextMenu.ApplicationContext is null &&
                   !((contextMenu.TargetVisualStateId is { } targetVisualStateId &&
                       selection.Contains(targetVisualStateId) &&
                       (eventArgs.State.Status != EditingSessionStatus.Ready ||
@@ -5653,6 +5682,7 @@ internal sealed partial class DocumentCanvasHost : IAsyncDisposable, IBpmnDocume
 
     private void RecordHostFailure(string code, string message, Exception exception)
     {
+        _lifecycleObservation?.Evidence.Record("HostCleanupFailure", code + ": " + message + " (" + exception.GetType().FullName + ")", failure: true);
         lock (_sync)
         {
             _hostDiagnostics =
@@ -5788,4 +5818,5 @@ internal sealed record DocumentCanvasHostState(
     ImmutableArray<ModelerPresentationViewChoice> PresentationViewChoices = default,
     bool CanAutoArrange = false,
     ElementToolboxState? ElementToolbox = null,
-    bool SmartEditEnabled = true);
+    bool SmartEditEnabled = true,
+    bool SurfaceRenderPending = false);

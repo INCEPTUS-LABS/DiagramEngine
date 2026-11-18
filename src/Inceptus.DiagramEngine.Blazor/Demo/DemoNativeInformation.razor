@@ -1,0 +1,72 @@
+@namespace Inceptus.DiagramEngine.Blazor.Demo
+@using Inceptus.DiagramEngine.Bpmn.Semantics
+@using Inceptus.DiagramEngine.Bpmn.Blazor
+@using Inceptus.DiagramEngine.Contracts.Documents
+@using Inceptus.DiagramEngine.Contracts.Properties
+@using Inceptus.DiagramEngine.Contracts.Primitives
+@using System.Collections.Immutable
+@using System.Globalization
+<section class="native-information" aria-label="Native information" aria-live="polite">
+    <h2>Native information</h2>
+    <p>@(ExplicitTarget ? "Inspected context-menu target" : "Current selection")</p>
+    @if (Document is null)
+    {
+        <p>Native information unavailable.</p>
+    }
+    else if (Targets.IsEmpty)
+    {
+        <p>Select an element or relationship to view its native information.</p>
+    }
+    else
+    {
+        @foreach (var target in Targets)
+        {
+            var fields = Fields(Document, target);
+            <article data-native-target="@target.SemanticId.Value" data-native-kind="@target.Kind">
+                <h3>@target.Kind</h3>
+                <dl>
+                    <dt>Identity</dt><dd>@target.SemanticId.Value</dd>
+                    @foreach (var field in fields)
+                    {
+                        <dt>@field.Key</dt><dd>@field.Value</dd>
+                    }
+                </dl>
+            </article>
+        }
+    }
+</section>
+@code {
+    [Parameter] public DocumentSnapshot? Document { get; set; }
+    [Parameter] public ImmutableArray<BpmnSemanticSelectionTarget> Targets { get; set; } = [];
+    [Parameter] public bool ExplicitTarget { get; set; }
+    internal static IEnumerable<KeyValuePair<string, string>> Fields(DocumentSnapshot document, BpmnSemanticSelectionTarget target)
+    {
+        PropertyMap properties;
+        if (target.Kind == BpmnSemanticTargetKind.Element && document.SemanticModel.TryGetElement(target.SemanticId, out var element) && element is not null)
+        {
+            yield return new("Type", element.TypeId.Value);
+            if (element.AttachedToElementId is { } owner) yield return new("Attached to", owner.Value);
+            properties = element.Properties;
+        }
+        else if (target.Kind == BpmnSemanticTargetKind.Relationship && document.SemanticModel.TryGetRelationship(target.SemanticId, out var relationship) && relationship is not null)
+        {
+            yield return new("Type", relationship.TypeId.Value);
+            yield return new("Source", Endpoint(document, relationship.SourceId));
+            yield return new("Target", Endpoint(document, relationship.TargetId));
+            properties = relationship.Properties;
+        }
+        else { yield return new("Information", "Target is unavailable in this native document."); yield break; }
+        foreach (var property in properties) yield return new(property.Key, ValueText(property.Value));
+    }
+    private static string Endpoint(DocumentSnapshot document, SemanticElementId id) =>
+        document.SemanticModel.TryGetElement(id, out var element) && element is not null && element.Properties.TryGetValue(BpmnSemanticProperties.Name, out var name)
+            ? $"{ValueText(name)} ({id.Value})" : id.Value;
+    private static string ValueText(PropertyValue value) => value.Kind switch
+    {
+        PropertyValueKind.Text => value.TextValue,
+        PropertyValueKind.Boolean => value.BooleanValue ? "true" : "false",
+        PropertyValueKind.Integer => value.IntegerValue.ToString(CultureInfo.InvariantCulture),
+        PropertyValueKind.Number => value.NumberValue.ToString(CultureInfo.InvariantCulture),
+        _ => string.Empty
+    };
+}

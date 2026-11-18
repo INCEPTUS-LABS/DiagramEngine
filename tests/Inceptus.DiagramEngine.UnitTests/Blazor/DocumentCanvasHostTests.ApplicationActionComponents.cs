@@ -58,6 +58,7 @@ public sealed partial class DocumentCanvasHostTests
             compositionFactory: facade.CompositionFactory);
         facade.Attach(host);
         await host.InitializeAsync("application-root-canvas", "application-root-container");
+        var observation = host.BeginApplicationActionObservation()!;
         var before = facade.GetDocument().Snapshot;
         var history = Session(host).CaptureState().HistoryStatus;
         await SelectApplicationTargetAsync(facade, new("v-source"));
@@ -72,6 +73,8 @@ public sealed partial class DocumentCanvasHostTests
         Assert.Equal(request.Target.SemanticId, received.Context.Target.SemanticId);
         Assert.Equal(request.Stamp, received.Context.Stamp);
         Assert.Equal(2, discoveryCount);
+        await WaitForApplicationConditionAsync(() => observation.Read().Events.Any(e => e.Stage == BpmnActionObservationStage.CompletionProcessed));
+        Assert.Contains(observation.Read().Events, e => e.Stage == BpmnActionObservationStage.ConsumerCallAttempt && e.ActionId == "app:first");
         Assert.Null(host.CaptureState().ContextMenu);
         Assert.Same(before, facade.GetDocument().Snapshot);
         Assert.Equal(history, Session(host).CaptureState().HistoryStatus);
@@ -92,17 +95,19 @@ public sealed partial class DocumentCanvasHostTests
     }
 
 #pragma warning disable BL0006 // Exercise compiled Razor event wiring and the actual root dispatcher.
-    private sealed class ApplicationComponentRenderer(IServiceProvider services)
+    private sealed partial class ApplicationComponentRenderer(IServiceProvider services)
         : Renderer(services, NullLoggerFactory.Instance)
     {
         public override Dispatcher Dispatcher { get; } = Dispatcher.CreateDefault();
         internal ApplicationComponentRoot Modeler { get; private set; } = null!;
         internal ConcurrentQueue<Exception> Exceptions { get; } = new();
+        private int _modelerComponentId;
 
         internal Task InitializeAsync(ParameterView parameters) => Dispatcher.InvokeAsync(async () =>
         {
             Modeler = (ApplicationComponentRoot)InstantiateComponent(typeof(ApplicationComponentRoot));
-            await RenderRootComponentAsync(AssignRootComponentId(Modeler), parameters);
+            _modelerComponentId = AssignRootComponentId(Modeler);
+            await RenderRootComponentAsync(_modelerComponentId, parameters);
         });
 
         internal Task ClickApplicationActionAsync(DocumentCanvasHost host, string actionId) => Dispatcher.InvokeAsync(async () =>

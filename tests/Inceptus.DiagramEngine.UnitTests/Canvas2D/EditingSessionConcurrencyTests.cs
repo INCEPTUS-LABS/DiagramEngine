@@ -148,8 +148,10 @@ public sealed class EditingSessionConcurrencyTests
         Assert.Equal(2, execution.Calls.Count(call => call == "render"));
     }
 
-    [Fact]
-    public async Task DelayedFifoDispatchStartsOneRunForEachExactCommittedSnapshot()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task DelayedFifoDispatchStartsOneRunForEachExactCommittedSnapshot(bool reverseContinuations)
     {
         var inputs = Canvas2DSceneTestData.Create();
         var original = EditingSessionTestHarness.CreateDocument(inputs).CaptureSnapshot();
@@ -191,30 +193,57 @@ public sealed class EditingSessionConcurrencyTests
             document.Revision,
             visual.Id,
             new PointD(300d, 200d)));
+        var committedFour = document.CaptureSnapshot();
         var revisionFive = await session.ExecuteAsync(new MoveVisualStateCommand(
             document.DocumentId,
             document.Revision,
             visual.Id,
             new PointD(500d, 350d)));
+        var committedFive = document.CaptureSnapshot();
 
         Assert.True(revisionFour.IsCommitted);
         Assert.True(revisionFive.IsCommitted);
         Assert.Equal(new DocumentRevision(5), document.Revision);
         Assert.Equal(1, pipeline.FullRunCount);
         Assert.Equal(1, scheduler.PendingCount);
-        scheduler.RunNext();
+        if (reverseContinuations)
+        {
+            // FIFO subscriber delivery does not prescribe Task.Yield continuation order.
+            // Keep both pipeline continuations pending until both events were delivered.
+            var context = new ReversedPipelineContinuations();
+            var preceding = SynchronizationContext.Current;
+            try
+            {
+                SynchronizationContext.SetSynchronizationContext(context);
+                scheduler.RunNext();
+            }
+            finally { SynchronizationContext.SetSynchronizationContext(preceding); }
+            Assert.Equal(2, events.Events.Count);
+            Assert.Equal(2, context.Count);
+            context.RunAll();
+        }
+        else scheduler.RunNext();
         await CommandProcessor.WaitForEventDispatchIdleAsync(document)
             .WaitAsync(TimeSpan.FromSeconds(5));
         await session.WaitForIdleAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5));
 
         Assert.Equal(3, pipeline.DocumentRunCount);
-        Assert.Equal(
-            [new DocumentRevision(3), new DocumentRevision(4), new DocumentRevision(5)],
-            pipeline.DocumentRuns.Select(static snapshot => snapshot.Revision));
-        Assert.Equal(2, events.Events.Count);
-        Assert.Same(events.Events.ElementAt(0).CommittedSnapshot, pipeline.DocumentRuns[1]);
-        Assert.Same(events.Events.ElementAt(1).CommittedSnapshot, pipeline.DocumentRuns[2]);
+        // Enforce FIFO at the subscriber boundary and exact-once snapshot use at the
+        // asynchronous pipeline boundary. Task.Yield deliberately permits reordered entry.
+        Assert.Collection(events.Events,
+            change => Assert.Same(committedFour, change.CommittedSnapshot),
+            change => Assert.Same(committedFive, change.CommittedSnapshot));
+        Assert.Equal(new DocumentRevision(3), pipeline.DocumentRuns[0].Revision);
+        foreach (var change in events.Events)
+        {
+            Assert.Same(change.CommittedSnapshot, Assert.Single(pipeline.DocumentRuns,
+                snapshot => snapshot.Revision == change.CommittedRevision));
+        }
+        if (reverseContinuations)
+            Assert.Equal([new DocumentRevision(3), new DocumentRevision(5), new DocumentRevision(4)],
+                pipeline.DocumentRuns.Select(static snapshot => snapshot.Revision));
         Assert.Equal(new DocumentRevision(5), session.CaptureState().CurrentScene?.SourceRevision);
+        Assert.Equal(EditingSessionStatus.Ready, session.CaptureState().Status);
         Assert.Equal(2, execution.Calls.Count(call => call == "render"));
     }
 
@@ -492,6 +521,17 @@ public sealed class EditingSessionConcurrencyTests
             }
 
             callback();
+        }
+    }
+
+    private sealed class ReversedPipelineContinuations : SynchronizationContext
+    {
+        private readonly Stack<(SendOrPostCallback Callback, object? State)> _callbacks = [];
+        internal int Count => _callbacks.Count;
+        public override void Post(SendOrPostCallback callback, object? state) => _callbacks.Push((callback, state));
+        internal void RunAll()
+        {
+            while (_callbacks.TryPop(out var work)) work.Callback(work.State);
         }
     }
 

@@ -316,6 +316,28 @@ public sealed class EditingSessionLifecycleTests
         Assert.Empty(state.RuntimeDiagnostics);
     }
 
+    [Fact]
+    public async Task LifecycleReceiptPreservesRendererDisposalDiagnosticsAfterTheAwait()
+    {
+        var inputs = Canvas2DSceneTestData.Create();
+        var pipeline = new ControlledEditingSessionPipeline();
+        pipeline.EnqueueFull(ControlledEditingSessionPipeline.Success(inputs));
+        var (renderer, execution) = await EditingSessionTestHarness.CreateInitializedRendererAsync();
+        var attachment = await EditingSession.AttachAsync(EditingSessionTestHarness.CreateDocument(inputs),
+            renderer, EditingSessionTestHarness.Configuration(), pipeline);
+        await using var session = Assert.IsType<EditingSession>(attachment.Session);
+        var evidence = new LifecycleObservation(session.DecorationAttachmentId);
+        session.LifecycleObservation = evidence;
+        execution.DisposeException = new InvalidOperationException("private renderer detail");
+        await session.DisposeAsync();
+        var events = evidence.Read().Events;
+        Assert.Contains(events, e => e.Stage == "RendererDisposed");
+        var failure = Assert.Single(events, e => e.Failure);
+        Assert.Equal("RendererDisposalDiagnostic", failure.Stage);
+        Assert.Contains(Canvas2DRendererDiagnosticCodes.ResourceDisposalFailed, failure.Detail, StringComparison.Ordinal);
+        Assert.DoesNotContain("private renderer detail", failure.Detail, StringComparison.Ordinal);
+    }
+
     private sealed class AcceptingEnvelopeValidator : ICommandEnvelopeValidator
     {
         public System.Collections.Immutable.ImmutableArray<Diagnostic> Validate(ICommand command) => [];

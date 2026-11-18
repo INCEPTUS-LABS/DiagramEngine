@@ -98,6 +98,7 @@ public sealed partial class DocumentCanvasHostTests
         var activator = new DemoPublishComponentActivator(host);
         var browser = new StandardDownloadRuntime(failDownload);
         using var services = new ServiceCollection().AddLogging().AddInceptusBpmnModeler()
+            .AddSingleton(_ => new HttpClient { BaseAddress = new Uri("https://demo.invalid/") })
             .AddSingleton<IJSRuntime>(browser).AddSingleton<IComponentActivator>(activator).BuildServiceProvider();
         await using var renderer = new HtmlRenderer(services, NullLoggerFactory.Instance);
         var rendered = await renderer.Dispatcher.InvokeAsync(() => renderer.RenderComponentAsync<BpmnDemoHost>(

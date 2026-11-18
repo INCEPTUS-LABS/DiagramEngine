@@ -1,5 +1,43 @@
 # Release notes
 
+## 1.2.0
+
+- Adds passive application decorations and presentation refresh through the public
+  modeler in Editable and ReadOnly. Text-only, SVG-with-text and SVG-only messages
+  can coexist on one native element, with independent message identities and coherent
+  collection updates/removal. Attachment and input revisions guard stale updates;
+  passive content does not alter native documents, geometry, History or exports.
+- Adds an application-owned action integration for the engine-rendered Smart
+  contextual toolbar and popup menu. Applications supply definitions, icons,
+  availability and handlers. The floating toolbar displays icons with accessible
+  names; popup items retain text and disabled explanations. Toolbar enablement is
+  independent of popup availability and native Smart Edit. Selection and explicit
+  popup targets remain distinct, with guarded dispatch and stale-request retirement.
+- Supports monotonic application-action revisions, optional typed handling outcomes
+  alongside the existing legacy callback, and explicit toolbar reactivation after
+  dismissal. Applications retain ownership of dialogs, domain data and persistence;
+  ReadOnly does not gain native editing capability.
+- Removes the popup's visible application-action heading, reserved heading space
+  and unconditional leading separator. Separators appear only between non-empty
+  groups; native action eligibility and accessible action labels are preserved.
+- Organises the source Demo into Editable, ReadOnly and Simulation modes with a
+  grouped mode selector. ReadOnly automatically displays native selection information
+  and offers graphical export only. Simulation demonstrates application actions,
+  composite annotations and illustrative operational information using the same
+  native ReadOnly modeler, without a simulation runtime or persistent profiles.
+  Optional maintenance controls remain separate from ordinary examples.
+- Corrects transient resize status reporting, host cleanup/native-save completion
+  and ordered callback verification. Demo panels retain access to native zoom
+  controls across supported layouts.
+- Aligns all seven packages at **1.2.0**. Canvas2D requires Runtime **[1.2.0]**;
+  other family dependencies retain their minimum-version ranges. SDK **10.0.403**,
+  **net10.0**, native `Inceptus.Document` formatVersion **2** and standalone
+  `Inceptus.PublishedProcess` formatVersion **1** remain unchanged. No document
+  migration or process-execution change is introduced.
+- Physical mobile-device, touchscreen and laptop-touchpad compatibility remains
+  unverified. Browser simulation and automated coverage do not establish physical
+  device compatibility. These notes describe the candidate, not package availability.
+
 ## 1.1.2
 
 - Stabilises selection-readiness regression verification by holding the scene

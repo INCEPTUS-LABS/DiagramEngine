@@ -99,6 +99,7 @@ public sealed class PhaseN80ProcessScopeArchitectureTests
             ReadProductionProject("Inceptus.DiagramEngine.Contracts")
                 .Concat(ReadProductionProject("Inceptus.DiagramEngine.Runtime"))
                 .Concat(ReadProductionProject("Inceptus.DiagramEngine.Canvas2D")));
+        genericSource = LifecycleObservationArchitectureTests.WithoutApprovedFriendDeclaration(genericSource);
         string[] forbiddenTokens =
         [
             "BPMN",

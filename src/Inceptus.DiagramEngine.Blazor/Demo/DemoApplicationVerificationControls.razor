@@ -1,0 +1,99 @@
+@namespace Inceptus.DiagramEngine.Blazor.Demo
+@using Microsoft.AspNetCore.Components.Web
+
+<section aria-label="Application action verification">
+    <label><input type="checkbox" data-application-verification="enabled" checked="@Example.VerificationEnabled"
+                  @onchange="ToggleVerificationAsync" /> Enable application verification controls</label>
+    @if (Example.VerificationEnabled)
+    {
+        <p>These opt-in application inputs exercise public contracts. They do not enable native editing.</p>
+        <label>Application labels
+            <select aria-label="Application label preset" data-application-verification="labels" value="@Example.Labels" @onchange="SetLabelsAsync">
+                <option value="Default">Default English / catalogue label</option>
+                <option value="Expanded">Long English labels and explanations</option>
+                <option value="German">Deutsch</option>
+                <option value="Spanish">Español</option>
+                <option value="French">Français</option>
+                <option value="Polish">Polski</option>
+            </select>
+        </label>
+        <p data-application-label-preset="@Example.Labels">Application label preset: @Example.Labels. Updates both action presentations without changing the native diagram.</p>
+        <label><input type="checkbox" data-application-verification="catalog" checked="@Example.AsyncCatalogEnabled"
+                      @onchange="ToggleCatalogAsync" /> Load application catalogue asynchronously</label>
+        <p>@Example.CatalogFeedback</p>
+        <button type="button" data-application-verification="read-catalog" @onclick="Example.ReadCatalogObservations">Read application task observations</button>
+        @if (Example.CatalogObservations is { } observations)
+        {
+            <p data-application-journal-overflow="@observations.Overflow">Journal overflow: @observations.Overflow.
+                Cancellation and Task readback do not expose the private dispatch queue or exact managed disposal entry.</p>
+            <pre data-application-journal style="max-height:18rem;overflow:auto;white-space:pre-wrap">@observations.ToString()</pre>
+        }
+        <label>Registration
+            <select aria-label="Verification registration" data-application-verification="registration" value="@Example.Registration" @onchange="SetRegistrationAsync">
+                <option value="Normal">Normal registration</option>
+                <option value="EmptyActions">Empty application results</option>
+                <option value="NoExtension">No application extension</option>
+                <option value="ProviderOnly">Provider without a handler</option>
+                <option value="ConflictingHandlers">Conflicting typed and legacy handlers</option>
+            </select>
+        </label>
+        <label>Typed handling attempt
+            <select aria-label="Verification typed outcome" data-application-verification="outcome" value="@Example.Outcome" @onchange="SetOutcomeAsync">
+                <option value="OpenInspector">Open inspector (Succeeded)</option>
+                <option value="Unavailable">Return Unavailable</option>
+                <option value="Cancelled">Return Cancelled</option>
+                <option value="Failed">Return Failed</option>
+                <option value="NullResult">Return null</option>
+                <option value="InvalidStatus">Construct unsupported result (throws)</option>
+                <option value="Throw">Throw application error</option>
+                <option value="UnrelatedCancellation">Throw unrelated cancellation</option>
+            </select>
+        </label>
+        <p>Choose Use typed handler in Application action example to exercise these outcomes. The legacy callback keeps its normal inspector behavior.</p>
+        <button type="button" data-application-verification="negative" @onclick="NegativeAsync">Submit negative revision</button>
+        <button type="button" data-application-verification="decreasing" @onclick="DecreasingAsync">Submit decreasing revision</button>
+        <button type="button" data-application-verification="recover" @onclick="RecoverAsync">Restore valid revision</button>
+        <button type="button" data-application-verification="capture" @onclick="Example.CaptureRequest">Capture contextual request</button>
+        <button type="button" data-application-verification="replay" disabled="@(Example.CapturedRequestStamp is null)"
+                @onclick="() => Example.ReplayRequestAsync(false)">Replay captured request</button>
+        <button type="button" data-application-verification="cancelled" disabled="@(Example.CapturedRequestStamp is null)"
+                @onclick="() => Example.ReplayRequestAsync(true)">Replay with cancelled token</button>
+        <p>Change selection, scope or policy, or replace/remount the modeler before replaying. The capture is not refreshed automatically.</p>
+        <p data-captured-request-instance="@Example.CapturedRequestStamp?.InstanceId"
+           data-captured-request-attachment="@Example.CapturedRequestStamp?.AttachmentVersion"
+           data-captured-request-selection="@Example.CapturedRequestStamp?.SelectionVersion"
+           data-captured-request-revision="@Example.CapturedRequestRevision">
+            Saved request: @(Example.CapturedRequestStamp?.ToString() ?? "none"); application revision @Example.CapturedRequestRevision
+        </p>
+        <p role="status" data-application-request-result="@Example.ReplayResult?.Status">@Example.RequestFeedback</p>
+        <p data-application-consumer-outcome>@Example.ConsumerOutcome</p>
+        <p role="status" data-application-failure-count="@Example.OperationFailureCount">Last failure notification (cumulative count @Example.OperationFailureCount): @Example.OperationFeedback</p>
+        <a href="simulation/?sample=message">Open Simulation Message Flow sample (native ReadOnly)</a>
+    }
+</section>
+
+@code {
+    [Parameter, EditorRequired] public DemoApplicationActionExample Example { get; set; } = null!;
+    [Parameter] public EventCallback Changed { get; set; }
+
+    private Task ToggleVerificationAsync(ChangeEventArgs args) { Example.SetVerificationEnabled(args.Value is true); return Changed.InvokeAsync(); }
+    private Task ToggleCatalogAsync(ChangeEventArgs args) { Example.SetAsyncCatalogEnabled(args.Value is true); return Changed.InvokeAsync(); }
+    private Task SetLabelsAsync(ChangeEventArgs args)
+    {
+        if (Enum.TryParse<DemoApplicationLabels>(args.Value?.ToString(), out var value)) Example.SetLabels(value);
+        return Changed.InvokeAsync();
+    }
+    private Task SetRegistrationAsync(ChangeEventArgs args)
+    {
+        if (Enum.TryParse<DemoApplicationRegistration>(args.Value?.ToString(), out var value)) Example.SetRegistration(value);
+        return Changed.InvokeAsync();
+    }
+    private Task SetOutcomeAsync(ChangeEventArgs args)
+    {
+        if (Enum.TryParse<DemoApplicationOutcome>(args.Value?.ToString(), out var value)) Example.SetOutcome(value);
+        return Changed.InvokeAsync();
+    }
+    private Task NegativeAsync() { Example.SubmitNegativeRevision(); return Changed.InvokeAsync(); }
+    private Task DecreasingAsync() { Example.SubmitDecreasingRevision(); return Changed.InvokeAsync(); }
+    private Task RecoverAsync() { Example.RestoreValidRevision(); return Changed.InvokeAsync(); }
+}

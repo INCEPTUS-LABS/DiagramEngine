@@ -1,3 +1,4 @@
+using Inceptus.DiagramEngine.Canvas2D.EditingSession;
 using Microsoft.JSInterop;
 
 namespace Inceptus.DiagramEngine.Bpmn.Blazor.Presentation;
@@ -59,6 +60,7 @@ internal sealed class CanvasPresentationPointerObserver :
     private readonly CanvasPresentationPointerCallback _callback;
     private readonly DotNetObjectReference<CanvasPresentationPointerCallback> _callbackReference;
     private int _disposed;
+    internal LifecycleObservation? LifecycleObservation { get; set; }
 
     internal CanvasPresentationPointerObserver(
         IJSObjectReference module,
@@ -113,6 +115,7 @@ internal sealed class CanvasPresentationPointerObserver :
         }
 
         _callback.Disable();
+        LifecycleObservation?.Record("PointerCallbackRetired");
 #pragma warning disable CA1031 // Browser cleanup is best effort and every handle is still released.
         try
         {
@@ -120,7 +123,7 @@ internal sealed class CanvasPresentationPointerObserver :
         }
         catch (Exception exception) when (IsNonFatal(exception))
         {
-            _ = exception;
+            LifecycleObservation?.Failure("PointerBrowserCleanupFailure", exception);
         }
 
         try
@@ -129,7 +132,7 @@ internal sealed class CanvasPresentationPointerObserver :
         }
         catch (Exception exception) when (IsNonFatal(exception))
         {
-            _ = exception;
+            LifecycleObservation?.Failure("PointerReferenceCleanupFailure", exception);
         }
 
         _callbackReference.Dispose();
@@ -139,7 +142,7 @@ internal sealed class CanvasPresentationPointerObserver :
         }
         catch (Exception exception) when (IsNonFatal(exception))
         {
-            _ = exception;
+            LifecycleObservation?.Failure("PointerModuleCleanupFailure", exception);
         }
 #pragma warning restore CA1031
     }

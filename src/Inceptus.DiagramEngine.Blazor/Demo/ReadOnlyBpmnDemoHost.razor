@@ -2,59 +2,66 @@
 @using Inceptus.DiagramEngine.Bpmn.Blazor
 @using Inceptus.DiagramEngine.Bpmn.Blazor.Components
 @using Inceptus.DiagramEngine.Canvas2D.EditingSession
+@using Inceptus.DiagramEngine.Canvas2D.Export
 @using Microsoft.AspNetCore.Components.Web
 @using Microsoft.Extensions.Localization
 @inject IStringLocalizer<ModelerStrings> Text
 @implements IDisposable
+@{ var verificationGeneration = _verificationGeneration; }
 
-<DemoApplicationLayout DisplayMode="_displayMode">
-    <div class="editor-toolbar host-toolbar" hidden="@(_displayMode == BpmnModelerDisplayMode.Maximized)"
+<DemoApplicationLayout DisplayMode="_displayMode" data-demo-mode="@(SimulationExamples ? "Simulation" : "ReadOnly")">
+    <div class="editor-toolbar host-toolbar" hidden="@(!SimulationExamples && _displayMode == BpmnModelerDisplayMode.Maximized)"
          role="toolbar" aria-label="Document operations">
-        <button @ref="_settingsButton" type="button" disabled="@(!CanOperate)"
-                @onclick="OpenSettingsAsync">@Text["Settings_Title"]</button>
+        <div class="demo-document-actions" hidden="@(_displayMode == BpmnModelerDisplayMode.Maximized)">
+            <DemoModeNavigation Mode="@(SimulationExamples ? "Simulation" : "ReadOnly")" />
+            <button @ref="_settingsButton" type="button" disabled="@(!CanOperate)"
+                    @onclick="OpenSettingsAsync">@Text["Settings_Title"]</button>
+            <button type="button" disabled="@(!CanOperate || _graphicalExportInProgress)" @onclick="ExportSvgAsync">Export SVG Image</button>
+            <button type="button" disabled="@(!CanOperate || _graphicalExportInProgress)" @onclick="ExportPngAsync">Export PNG Image</button>
+        </div>
+        @if (SimulationExamples)
+        {
+            <DemoApplicationActions Example="ActionExample" Maintenance="_maintenanceEnabled" Changed="StateHasChanged"
+                CanUnmount="_verificationMounted" UnmountRequested="UnmountForVerification" />
+            <DemoAnnotations Modeler="Modeler" Maintenance="_maintenanceEnabled" />
+        }
     </div>
+    <DemoMaintenance Enabled="_maintenanceEnabled" EnabledChanged="SetMaintenance">
+        @if (SimulationExamples)
+        {
+            <DemoApplicationVerificationControls Example="ActionExample" Changed="StateHasChanged" />
+        }
+        <DemoVerificationControls Modeler="Modeler" Mounted="_verificationMounted" MountGeneration="_verificationGeneration"
+            MountId="@VerificationMountId" RetiredCallbackCount="_verificationRetiredCallbacks" AllowReplacement="true" AllowDecorations="SimulationExamples"
+            UnmountRequested="UnmountForVerification" MountRequested="MountForVerification" Changed="RefreshPresentation" />
+        <DemoCultureControls />
+    </DemoMaintenance>
     <canvas id="@MeasurementId" class="sample-measurement" aria-hidden="true" tabindex="-1" width="1" height="1"></canvas>
-    @if (_source is not null)
-    {
-        <InceptusBpmnModeler @ref="Modeler" InitialDocument="_source" AccessMode="EditingSessionAccessMode.ReadOnly"
-            @bind-DisplayMode="_displayMode"
-            Ready="OnReady" DocumentChanged="OnDocumentChanged" SelectionChanged="OnSelectionChanged"
-            ViewChanged="RefreshPresentation" OperationFailed="OnFailure"
-            ApplicationActionProvider="DiscoverActionsAsync" ApplicationActionInvoked="InspectAsync" />
-    }
-    else
-    {
-        <p class="inspection-feedback" role="status">@Feedback</p>
-    }
-    @if (_detailsOpen)
-    {
-        <aside class="selection-details" aria-label="Semantic selection" aria-live="polite"
-               @onpointerdown:stopPropagation @onwheel:stopPropagation @oncontextmenu:preventDefault>
-            <header>
-                <h2>Inspection details</h2>
-                <button type="button" aria-label="Close inspection details" @onclick="CloseDetails">×</button>
-            </header>
-            @if (Presentation is not { IsAvailable: true })
+    <div class="demo-workspace">
+        @if (_source is not null && _verificationMounted)
+        {
+            <InceptusBpmnModeler @ref="Modeler" InitialDocument="_source" AccessMode="EditingSessionAccessMode.ReadOnly"
+                @bind-DisplayMode="_displayMode"
+                data-demo-mount-id="@VerificationMountId"
+                Ready="args => VerificationReady(verificationGeneration, args)"
+                DocumentChanged="args => VerificationDocumentChanged(verificationGeneration, args)"
+                SelectionChanged="args => VerificationSelectionChanged(verificationGeneration, args)"
+                ViewChanged="() => VerificationViewChanged(verificationGeneration)"
+                OperationFailed="args => VerificationFailure(verificationGeneration, args)"
+                ApplicationActionProvider="@(SimulationExamples ? ActionExample.RegisteredProvider : DiscoverNativeInspectionAsync)"
+                ApplicationContextualActionsEnabled="@(SimulationExamples && ActionExample.ToolbarEnabled)"
+                ApplicationActionsRevision="@(_actionExample?.Revision ?? 0)"
+                ApplicationActionHandler="@(SimulationExamples ? ActionExample.RegisteredTypedHandler : null)"
+                ApplicationActionInvoked="@(SimulationExamples ? (ActionExample.RegisterLegacyHandler ? EventCallback.Factory.Create(this, ActionExample.LegacyHandler) : default) : EventCallback.Factory.Create(this, VerificationInspectionCallback))" />
+        }
+        <aside class="demo-information" aria-label="@(SimulationExamples ? "Simulation examples and native information" : "Selected native information")">
+            @if (SimulationExamples)
             {
-                <p>Presentation unavailable.</p>
+                <h2>Simulation examples</h2>
+                <p>Illustrative application-owned information. No simulation runtime or saved profiles.</p>
             }
-            else if (Presentation.Selection.IsEmpty)
-            {
-                <p>No selection.</p>
-            }
-            else
-            {
-                <ol>
-                    @foreach (var target in Presentation.Selection)
-                    {
-                        <li><strong>@target.Kind</strong> <code>@target.SemanticId.Value</code>
-                            <span> · @(target.VisualStateId?.Value ?? "Semantic-only presentation")</span></li>
-                    }
-                </ol>
-                <p>Selected part: @(Presentation.PrimaryPart?.Kind.ToString() ?? "No specific presentation part")</p>
-            }
-            <p class="application-details">@ApplicationDetails</p>
+            <DemoNativeInformation Document="InformationDocument" Targets="InformationTargets" ExplicitTarget="@(_inspectedTarget is not null)" />
             <p class="inspection-feedback" role="status">@Feedback</p>
         </aside>
-    }
+    </div>
 </DemoApplicationLayout>

@@ -120,6 +120,10 @@ public sealed partial class EditingSession
                 }
 
                 await _renderer.DisposeAsync().ConfigureAwait(false);
+                LifecycleObservation?.Record("RendererDisposed");
+                if (LifecycleObservation is { } observation)
+                    foreach (var diagnostic in _renderer.DisposalDiagnostics)
+                        observation.Record("RendererDisposalDiagnostic", diagnostic.Code + ": " + diagnostic.Message, failure: true);
                 lock (_sync)
                 {
                     if (!_renderer.DisposalDiagnostics.IsEmpty)

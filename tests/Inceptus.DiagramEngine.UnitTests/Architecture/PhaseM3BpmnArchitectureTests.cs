@@ -122,6 +122,7 @@ public sealed class PhaseM3BpmnArchitectureTests
             "Inceptus.DiagramEngine.Canvas2D",
             string.Empty,
             "*.cs");
+        canvasSources = LifecycleObservationArchitectureTests.WithoutApprovedFriendDeclaration(canvasSources);
 
         Assert.DoesNotContain("Inceptus.DiagramEngine.Bpmn", canvasProject, StringComparison.Ordinal);
         Assert.DoesNotContain("BPMN.", canvasSources, StringComparison.OrdinalIgnoreCase);

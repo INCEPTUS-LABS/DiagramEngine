@@ -1,0 +1,26 @@
+.demo-application-actions {
+    position: relative;
+    z-index: 33;
+    justify-self: end;
+    margin: .35rem .75rem;
+    box-sizing: border-box;
+    min-width: 0;
+    max-width: min(28rem, calc(100% - 1.5rem));
+    max-height: min(18rem, 35dvh);
+    overflow: auto;
+    padding: .4rem .8rem;
+    border: 1px solid #475569;
+    border-radius: .5rem;
+    color: #e2e8f0;
+    background: #0f172a;
+    font-size: .875rem;
+}
+.demo-application-actions summary { cursor: pointer; }
+.demo-application-actions label { display: inline-flex; gap: .35rem; align-items: center; margin: .3rem .8rem .3rem 0; }
+.demo-application-actions button { min-height: 2.75rem; }
+.application-inspector-backdrop { position: fixed; inset: 0; z-index: 2000; display: grid; place-items: center; background: #0f172a66; }
+.application-inspector { margin: 1rem; padding: 1.5rem; max-width: 40rem; max-height: calc(100vh - 2rem); overflow: auto; border-radius: .5rem; background: white; color: #0f172a; box-shadow: 0 1rem 3rem #0005; }
+.application-inspector p { overflow-wrap: anywhere; }
+.application-inspector button { min-height: 2.75rem; }
+.focus-boundary { display: block; width: 0; height: 0; overflow: hidden; }
+.demo-application-actions :focus-visible, .application-inspector :focus-visible { outline: 3px solid #0284c7; outline-offset: 2px; }

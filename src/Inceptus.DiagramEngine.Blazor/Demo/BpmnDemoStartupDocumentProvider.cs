@@ -19,12 +19,15 @@ internal sealed class BpmnDemoStartupDocumentProvider : IBpmnModelerStartupDocum
     }
 
     public async ValueTask<Document> GetInitialDocumentAsync(
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default) =>
+        await ReadDocumentAsync(ResourceName, cancellationToken).ConfigureAwait(false);
+
+    internal static async ValueTask<Document> ReadDocumentAsync(string resourceName, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
         await using var resource = typeof(BpmnDemoStartupDocumentProvider).Assembly
-            .GetManifestResourceStream(ResourceName) ?? throw new InvalidOperationException(
+            .GetManifestResourceStream(resourceName) ?? throw new InvalidOperationException(
                 "The embedded BPMN demo Document is unavailable.");
         using var payload = new MemoryStream();
         await resource.CopyToAsync(payload, cancellationToken).ConfigureAwait(false);

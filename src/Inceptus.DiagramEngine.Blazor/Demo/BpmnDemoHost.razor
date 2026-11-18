@@ -10,7 +10,7 @@
 @inject IStringLocalizer<ModelerStrings> Text
 @inject Microsoft.JSInterop.IJSRuntime JavaScript
 @implements IAsyncDisposable
-@{ var toolbar = CaptureToolbarPresentation(); }
+@{ var toolbar = CaptureToolbarPresentation(); var verificationGeneration = _verificationGeneration; }
 <DemoApplicationLayout DisplayMode="_displayMode"
      KeyDown="HandleHostKeyDown" Click="CloseDocumentMenu" data-native-document-operation="@_nativeDocumentOperationStatus"
      data-native-document-error-code="@(_nativeDocumentOperationErrorCode ?? string.Empty)"
@@ -22,6 +22,7 @@
      data-validation-info-count="@ValidationInfoCount" data-can-validate="@CanValidateValue" data-issues-panel-open="@IssuesPanelOpenValue">
     <div class="editor-toolbar host-toolbar" hidden="@(_displayMode == BpmnModelerDisplayMode.Maximized)"
          role="toolbar" aria-label="Document operations" @onclick:stopPropagation>
+        <DemoModeNavigation Mode="Editable" />
         <div class="document-format-control">
             <button type="button" aria-expanded="@(_documentMenu == "import" ? "true" : "false")" aria-controls="@DomId("import-formats")"
                     disabled="@(!toolbar.CanTransfer)" @onclick="ToggleImportMenu">Import <span aria-hidden="true">▾</span></button>
@@ -114,11 +115,33 @@
             }
         </div>
     </div>
-    <canvas id="@DomId("import-measurement")" class="import-measurement" aria-hidden="true" width="1" height="1"></canvas>
+    <DemoMaintenance Enabled="_maintenanceEnabled" EnabledChanged="SetMaintenanceAsync">
+        <DemoApplicationVerificationControls Example="ActionExample" Changed="StateHasChanged" />
+        <DemoCultureControls />
+    <DemoApplicationActions Maintenance="true" Example="ActionExample" Changed="StateHasChanged"
+        CanUnmount="@(Editor is null && _verificationMounted)" UnmountRequested="UnmountForVerification" />
+    <DemoAnnotations Maintenance="true" Modeler="SettingsModeler" />
     @if (Editor is null)
     {
-        <InceptusBpmnModeler @ref="_modeler" @bind-DisplayMode="_displayMode"
-                             Ready="OnReady" DocumentChanged="OnDocumentChanged" ViewChanged="OnViewChanged" />
+        <DemoVerificationControls Modeler="_modeler" Mounted="_verificationMounted" MountGeneration="_verificationGeneration"
+            MountId="@VerificationMountId" RetiredCallbackCount="_verificationRetiredCallbacks" AllowReplacement="true"
+            UnmountRequested="UnmountForVerification" MountRequested="MountForVerification" Changed="OnViewChanged" />
+    }
+    </DemoMaintenance>
+    <canvas id="@DomId("import-measurement")" class="import-measurement" aria-hidden="true" width="1" height="1"></canvas>
+    @if (Editor is null && _verificationMounted)
+    {
+        <InceptusBpmnModeler @ref="_modeler" InitialDocument="_verificationSource" @bind-DisplayMode="_displayMode"
+            data-demo-mount-id="@VerificationMountId"
+            Ready="args => VerificationReady(verificationGeneration, args)"
+            DocumentChanged="args => VerificationDocumentChanged(verificationGeneration, args)"
+            ViewChanged="() => VerificationViewChanged(verificationGeneration)"
+            OperationFailed="args => VerificationActionFailure(verificationGeneration, args)"
+            ApplicationActionProvider="@(_maintenanceEnabled ? ActionExample.RegisteredProvider : null)"
+            ApplicationContextualActionsEnabled="@(_maintenanceEnabled && ActionExample.ToolbarEnabled)"
+            ApplicationActionsRevision="@(_actionExample?.Revision ?? 0)"
+            ApplicationActionHandler="@(_maintenanceEnabled ? ActionExample.RegisteredTypedHandler : null)"
+            ApplicationActionInvoked="@(_maintenanceEnabled && ActionExample.RegisterLegacyHandler ? EventCallback.Factory.Create(this, ActionExample.LegacyHandler) : default)" />
     }
             @if (_issuesPanel.IsOpen)
             {

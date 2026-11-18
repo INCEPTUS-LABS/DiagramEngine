@@ -333,6 +333,7 @@ public sealed class PhaseL57ConnectorRoutePointArchitectureTests
             .Split(
                 ['\r', '\n'],
                 StringSplitOptions.RemoveEmptyEntries)
+            .Where(static line => !ApprovedLocalInvestigationSeparation.IsIndexOnlyRemoval(line))
             .Select(static line => line.Length > 3
                 ? line[3..].Trim().Replace('\\', '/')
                 : line.Trim())

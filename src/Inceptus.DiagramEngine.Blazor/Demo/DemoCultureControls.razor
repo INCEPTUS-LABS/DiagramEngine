@@ -1,0 +1,29 @@
+@namespace Inceptus.DiagramEngine.Blazor.Demo
+@using System.Globalization
+@using Microsoft.AspNetCore.Components.Web
+@inject NavigationManager Navigation
+
+<section aria-label="Demo modeler culture">
+    <label>Modeler UI culture (reloads page)
+        <select aria-label="Modeler UI culture" data-demo-ui-culture value="@CultureInfo.CurrentUICulture.Name" @onchange="ChangeCulture">
+            <option value="en">English (en)</option>
+            <option value="de">Deutsch (de)</option>
+            <option value="es">Español (es)</option>
+            <option value="fr">Français (fr)</option>
+            <option value="pl">Polski (pl)</option>
+        </select>
+    </label>
+    <p data-demo-active-ui-culture="@CultureInfo.CurrentUICulture.Name" data-demo-format-culture="@CultureInfo.CurrentCulture.Name">
+        Active modeler UI culture: @CultureInfo.CurrentUICulture.Name. Numeric formatting: invariant.
+        Reload resets Demo inputs; application label presets are independent.
+    </p>
+</section>
+
+@code {
+    private void ChangeCulture(ChangeEventArgs args)
+    {
+        var name = args.Value?.ToString();
+        if (!DemoUiCulture.IsSupported(name) || name == CultureInfo.CurrentUICulture.Name) return;
+        Navigation.NavigateTo(Navigation.GetUriWithQueryParameter("uiCulture", name), forceLoad: true);
+    }
+}

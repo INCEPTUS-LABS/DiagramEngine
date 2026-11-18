@@ -133,6 +133,16 @@ public sealed class Canvas2DScene : IEquatable<Canvas2DScene>, IDisposable
 
     internal ImmutableArray<Canvas2DSceneItem> RenderContent => BoundedPresentation?.Source.Items ?? Items;
 
+    // Render-only content never enters the native interaction, bounds, capture or persistence lane.
+    // Bounded native previews cannot be reused here: their Source.Items excludes decorations.
+    internal Canvas2DScene WithDecorations(ImmutableArray<Canvas2DSceneItem> items,
+        Canvas2DBoundaryGuidePresentation? boundaryGuides = null) => new(
+        DocumentId, SourceRevision, LayoutAlgorithmId, RoutingAlgorithmId, Configuration,
+        Contributors, Viewport, ViewportTransform, ActiveToolId, FocusTargetId, ToolState,
+        ContributorMetadata, items, Diagnostics, SpatialPresentationPlan,
+        boundaryGuides: boundaryGuides ?? BoundaryGuides, presentationContext: PresentationContext,
+        presentationPlan: PresentationPlan);
+
     internal Canvas2DScene WithBoundedPresentation(
         Canvas2DBoundedPresentation presentation,
         ImmutableArray<Canvas2DSceneItem> items,

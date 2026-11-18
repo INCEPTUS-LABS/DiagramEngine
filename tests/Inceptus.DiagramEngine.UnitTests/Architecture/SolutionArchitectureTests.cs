@@ -111,7 +111,7 @@ public sealed class SolutionArchitectureTests
     {
         var buildProperties = XDocument.Load(Path.Combine(RepositoryRoot, "Directory.Build.props"));
 
-        Assert.Equal("1.1.2", ReadElementValue(buildProperties, "Version"));
+        Assert.Equal("1.2.0", ReadElementValue(buildProperties, "Version"));
         Assert.Equal("Robert Prokopczuk", ReadElementValue(buildProperties, "Authors"));
 
         var releaseTargets = XDocument.Load(Path.Combine(RepositoryRoot, "Directory.Build.targets"));
@@ -481,6 +481,14 @@ public sealed class SolutionArchitectureTests
         [
             "Inceptus.DiagramEngine.Contracts.Canvas2D.Canvas2DCanonicalSceneItemVisualOverride",
             "Inceptus.DiagramEngine.Contracts.Canvas2D.Canvas2DConnectorPresentationSourceSpace",
+            "Inceptus.DiagramEngine.Contracts.Canvas2D.Canvas2DDecorationContent",
+            "Inceptus.DiagramEngine.Contracts.Canvas2D.Canvas2DDecorationContext",
+            "Inceptus.DiagramEngine.Contracts.Canvas2D.Canvas2DDecorationInput",
+            "Inceptus.DiagramEngine.Contracts.Canvas2D.Canvas2DDecorationOwnerKind",
+            "Inceptus.DiagramEngine.Contracts.Canvas2D.Canvas2DDecorationPart",
+            "Inceptus.DiagramEngine.Contracts.Canvas2D.Canvas2DDecorationPartKind",
+            "Inceptus.DiagramEngine.Contracts.Canvas2D.Canvas2DDecorationResourceSet",
+            "Inceptus.DiagramEngine.Contracts.Canvas2D.Canvas2DDecorationSvgResource",
             "Inceptus.DiagramEngine.Contracts.Canvas2D.Canvas2DScopeGeometryBaseContext",
             "Inceptus.DiagramEngine.Contracts.Canvas2D.Canvas2DScopeGeometryBaseResult",
             "Inceptus.DiagramEngine.Contracts.Canvas2D.Canvas2DDerivedRegionMapping",
@@ -583,6 +591,7 @@ public sealed class SolutionArchitectureTests
             "Inceptus.DiagramEngine.Contracts.Canvas2D.Canvas2DTextAlignment",
             "Inceptus.DiagramEngine.Contracts.Canvas2D.Canvas2DTextBaseline",
             "Inceptus.DiagramEngine.Contracts.Canvas2D.ICanvas2DSceneContributor",
+            "Inceptus.DiagramEngine.Contracts.Canvas2D.ICanvas2DDecorationProvider",
             "Inceptus.DiagramEngine.Contracts.Canvas2D.ICanvas2DConnectorPresentationRouter",
             "Inceptus.DiagramEngine.Contracts.Canvas2D.ICanvas2DSpatialEditPlanner",
             "Inceptus.DiagramEngine.Contracts.ConnectionCreation.AnchorConnectionCreationCatalog",
@@ -907,6 +916,9 @@ public sealed class SolutionArchitectureTests
     {
         string[] expectedTypeNames =
         [
+            "Inceptus.DiagramEngine.Canvas2D.EditingSession.Canvas2DDecorationPresentation",
+            "Inceptus.DiagramEngine.Canvas2D.EditingSession.Canvas2DDecorationUpdateResult",
+            "Inceptus.DiagramEngine.Canvas2D.EditingSession.Canvas2DDecorationUpdateStatus",
             "Inceptus.DiagramEngine.Canvas2D.EditingSession.EditingSession",
             "Inceptus.DiagramEngine.Canvas2D.EditingSession.ConnectorRoutingStatePreparer",
             "Inceptus.DiagramEngine.Canvas2D.EditingSession.EditingSessionAttachResult",
@@ -1011,8 +1023,12 @@ public sealed class SolutionArchitectureTests
             "Inceptus.DiagramEngine.Bpmn.Blazor.BpmnModelerSaveCheckpoint",
             "Inceptus.DiagramEngine.Bpmn.Blazor.BpmnApplicationAction",
             "Inceptus.DiagramEngine.Bpmn.Blazor.BpmnApplicationActionContext",
+            "Inceptus.DiagramEngine.Bpmn.Blazor.BpmnApplicationActionIcon",
+            "Inceptus.DiagramEngine.Bpmn.Blazor.BpmnApplicationActionResult",
+            "Inceptus.DiagramEngine.Bpmn.Blazor.BpmnApplicationActionHandler",
             "Inceptus.DiagramEngine.Bpmn.Blazor.BpmnApplicationActionProvider",
             "Inceptus.DiagramEngine.Bpmn.Blazor.BpmnApplicationActionInvocationEventArgs",
+            "Inceptus.DiagramEngine.Bpmn.Blazor.BpmnDecorationAttachment",
             "Microsoft.Extensions.DependencyInjection.BpmnModelerServiceCollectionExtensions",
         ];
         var assembly = LoadProductionAssembly(BpmnBlazor);
@@ -1048,8 +1064,24 @@ public sealed class SolutionArchitectureTests
             .Cast<string>();
 
         Assert.Equal(["Inceptus.DiagramEngine.Blazor.App", "Inceptus.DiagramEngine.Blazor.Demo.BpmnDemoHost",
-            "Inceptus.DiagramEngine.Blazor.Demo.DemoApplicationLayout", "Inceptus.DiagramEngine.Blazor.Demo.ReadOnlyBpmnDemoHost",
-            "Inceptus.DiagramEngine.Blazor.Pages.Editable", "Inceptus.DiagramEngine.Blazor.Pages.ReadOnly"], actualTypeNames.Order(StringComparer.Ordinal));
+            "Inceptus.DiagramEngine.Blazor.Demo.DemoAnnotations",
+            // The source-only component's typed parameter carries its application-owned example state.
+            "Inceptus.DiagramEngine.Blazor.Demo.DemoApplicationActionExample",
+            "Inceptus.DiagramEngine.Blazor.Demo.DemoApplicationActions",
+            "Inceptus.DiagramEngine.Blazor.Demo.DemoApplicationInspectorVerification",
+            "Inceptus.DiagramEngine.Blazor.Demo.DemoApplicationLabels",
+            "Inceptus.DiagramEngine.Blazor.Demo.DemoApplicationLayout",
+            // Opt-in source Demo inputs; these are not packaged modeler API contracts.
+            "Inceptus.DiagramEngine.Blazor.Demo.DemoApplicationOutcome",
+            "Inceptus.DiagramEngine.Blazor.Demo.DemoApplicationRegistration",
+            "Inceptus.DiagramEngine.Blazor.Demo.DemoApplicationVerificationControls",
+            "Inceptus.DiagramEngine.Blazor.Demo.DemoCultureControls",
+            "Inceptus.DiagramEngine.Blazor.Demo.DemoMaintenance",
+            "Inceptus.DiagramEngine.Blazor.Demo.DemoModeNavigation",
+            "Inceptus.DiagramEngine.Blazor.Demo.DemoNativeInformation",
+            "Inceptus.DiagramEngine.Blazor.Demo.DemoVerificationControls",
+            "Inceptus.DiagramEngine.Blazor.Demo.ReadOnlyBpmnDemoHost",
+            "Inceptus.DiagramEngine.Blazor.Pages.Editable", "Inceptus.DiagramEngine.Blazor.Pages.ReadOnly", "Inceptus.DiagramEngine.Blazor.Pages.Simulation"], actualTypeNames.Order(StringComparer.Ordinal));
     }
 
     [Fact]

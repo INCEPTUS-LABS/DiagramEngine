@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Text.RegularExpressions;
 using Inceptus.DiagramEngine.Canvas2D.Rendering;
 using Inceptus.DiagramEngine.Canvas2D.Scene;
 using Inceptus.DiagramEngine.Contracts.Commands;
@@ -126,6 +127,27 @@ public sealed class PhaseICanvas2DRendererArchitectureTests
             "Inceptus.DiagramEngine.Canvas2D",
             "wwwroot",
             "inceptus.canvas2d.js"));
+
+        // Approved composite decorations decode validated static SVG payloads as private
+        // image Blobs and draw them with the existing Canvas2D image primitive. This permits
+        // only the reviewed transport fields, MIME literal, and explanatory comment; the
+        // original SVG/backend prohibition still applies to every other occurrence.
+        const string StaticImageConversion =
+            "URL.createObjectURL(new Blob([descriptor.svgContent], { type: \"image/svg+xml\" }))";
+        Assert.Contains(StaticImageConversion, source, StringComparison.Ordinal);
+        Assert.Equal(1, source.Split("new Blob(", StringSplitOptions.None).Length - 1);
+        Assert.Equal(1, source.Split("URL.createObjectURL(", StringSplitOptions.None).Length - 1);
+        Assert.Contains("entry.image.src = url;", source, StringComparison.Ordinal);
+        Assert.Contains("await wait(entry.image.decode());", source, StringComparison.Ordinal);
+        Assert.Contains("this.#context.drawImage(image, bounds.x, bounds.y, bounds.width, bounds.height);",
+            source, StringComparison.Ordinal);
+
+        var backendSource = Regex.Replace(source, @"\b(descriptor|resource)\.svgContent\b",
+                "$1.imageContent", RegexOptions.CultureInvariant)
+            .Replace("\"image/svg+xml\"", "\"approved-static-image\"", StringComparison.Ordinal)
+            .Replace("// Both native and SVG decode rejection are observed, including after retirement.",
+                "// Both native and image decode rejection are observed, including after retirement.",
+                StringComparison.Ordinal);
         string[] forbidden =
         [
             "OffscreenCanvas",
@@ -138,6 +160,18 @@ public sealed class PhaseICanvas2DRendererArchitectureTests
         ];
 
         Assert.DoesNotContain(forbidden, fragment =>
+            backendSource.Contains(fragment, StringComparison.OrdinalIgnoreCase));
+
+        // Detached raster export may create its one canvas. No SVG DOM, parsed markup,
+        // or alternate element creation path is admitted by the image-payload exception.
+        Assert.Contains("document.createElement(\"canvas\")", source, StringComparison.Ordinal);
+        Assert.Equal(1, source.Split("document.createElement(", StringSplitOptions.None).Length - 1);
+        string[] forbiddenMarkup =
+        [
+            "createElementNS", "innerHTML", "outerHTML", "insertAdjacentHTML", "DOMParser",
+            "parseFromString", "createContextualFragment", "setHTML", "parseHTMLUnsafe", "document.write",
+        ];
+        Assert.DoesNotContain(forbiddenMarkup, fragment =>
             source.Contains(fragment, StringComparison.OrdinalIgnoreCase));
     }
 

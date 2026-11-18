@@ -22,6 +22,7 @@ let rejectNextStroke = false;
 let version = 0;
 const versions = () => ({ contentVersion: ++version, presentationVersion: version });
 let pendingImageLoad = null;
+let decorationDecode = null;
 
 class FakeContext {
     save() { operations.push(["save"]); }
@@ -80,6 +81,7 @@ globalThis.Image = class {
     set src(value) { this._src = value; }
     get src() { return this._src; }
     async decode() {
+        if (decorationDecode) await decorationDecode(this._src);
         if (pendingImageLoad) await pendingImageLoad;
         if (this._src === rejectedImageUri) throw new Error("image decode failed");
         loadedImages.push(this._src);
@@ -1307,4 +1309,262 @@ test("unexpected Canvas shadows or filters disable culling without changing draw
             delete context[property];
         }
     } finally { renderer.dispose(); }
+});
+
+const decorationSvg = color => `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16"><rect width="16" height="16" fill="${color}"/></svg>`;
+const decorationImage = (reference = "app:status", color = "red", identity = "A") => ({
+    reference, contentIdentity: identity.repeat(64), svgContent: decorationSvg(color)
+});
+const decorationCatalog = (images = [decorationImage()], inputRevision = 1, attachmentId = "attachment-a") => ({
+    attachmentId, inputRevision, identity: `${attachmentId}:${inputRevision}`, images
+});
+const decorationFrame = (version, catalog = decorationCatalog(), items = null) => ({
+    ...content(version, version, items ?? catalog.images.map((image, index) => ({
+        ...rectangle(`decoration-${index}`, 4), geometryKind: 4, content: image.reference
+    }))), decorationResources: catalog
+});
+async function flushDecorationWork() {
+    for (let index = 0; index < 12; index++) await Promise.resolve();
+}
+function trackDecorationUrls() {
+    const create = URL.createObjectURL;
+    const revoke = URL.revokeObjectURL;
+    const blobs = new Map();
+    const revoked = [];
+    let sequence = 0;
+    URL.createObjectURL = blob => {
+        const url = `blob:decoration-test-${++sequence}`;
+        blobs.set(url, blob);
+        return url;
+    };
+    URL.revokeObjectURL = url => { revoked.push(url); };
+    return { blobs, revoked, restore() { URL.createObjectURL = create; URL.revokeObjectURL = revoke; } };
+}
+
+test("composite frame waits for all SVG images before drawing any text or native content", async () => {
+    const renderer = createRenderer("canvas");
+    const urls = trackDecorationUrls();
+    const releases = [];
+    try {
+        await renderer.initialize(cacheSurface, [], [delayedFont], "Delayed");
+        decorationDecode = () => new Promise(resolve => releases.push(resolve));
+        const catalog = decorationCatalog([decorationImage(), decorationImage("app:second", "blue", "B")]);
+        const items = [rectangle("native", 1),
+            { ...rectangle("label", 3), geometryKind: 3, content: "Waiting: 12", fontFamily: "Delayed" },
+            ...catalog.images.map((image, index) => ({ ...rectangle(`svg-${index}`, 4), geometryKind: 4, content: image.reference }))];
+        operations.length = 0;
+        const pending = renderer.render(decorationFrame(1, catalog, items));
+        await flushDecorationWork();
+        assert.equal(releases.length, 1);
+        assert.equal(operations.length, 0);
+        releases[0]();
+        await flushDecorationWork();
+        assert.equal(releases.length, 2);
+        assert.equal(operations.length, 0);
+        releases[1]();
+        assert.equal((await pending).succeeded, true);
+        assert.equal(operations.filter(operation => operation[0] === "drawImage").length, 2);
+        assert.equal(operations.filter(operation => operation[0] === "fillText").length, 1);
+        assert.equal(urls.blobs.size, 2);
+        assert.ok([...urls.blobs.values()].every(blob => blob.type === "image/svg+xml"));
+        assert.equal(urls.revoked.length, 0);
+    } finally {
+        for (const release of releases) release();
+        decorationDecode = null;
+        renderer.dispose();
+        assert.equal(urls.revoked.length, urls.blobs.size);
+        urls.restore();
+    }
+});
+
+test("SVG content replacement and native fallback keep bounded private leases and preserve native images", async () => {
+    const renderer = createRenderer("canvas");
+    const urls = trackDecorationUrls();
+    try {
+        await renderer.initialize(cacheSurface, [{ reference: "native:image", uri: "/native.png" }], [], null);
+        loadedImages.length = 0;
+        const native = { ...rectangle("native", 1), geometryKind: 4, content: "native:image" };
+        for (let index = 1; index <= 20; index++) {
+            const image = decorationImage("app:status", index % 2 ? "red" : "blue", index % 2 ? "A" : "B");
+            const items = [native, { ...rectangle("svg", 4), geometryKind: 4, content: image.reference }];
+            assert.equal((await renderer.render(decorationFrame(index, decorationCatalog([image], index), items))).succeeded, true);
+            assert.equal(urls.blobs.size - urls.revoked.length, 1);
+        }
+        assert.equal(loadedImages.filter(uri => uri === "/native.png").length, 1);
+        assert.equal((await renderer.render(content(21, 21, [native]))).succeeded, true);
+        assert.equal(urls.revoked.length, urls.blobs.size);
+        assert.equal(renderer.renderViewport(viewport(21, 22)).succeeded, true);
+        assert.equal(loadedImages.filter(uri => uri === "/native.png").length, 1);
+    } finally { renderer.dispose(); urls.restore(); }
+});
+
+test("same immutable SVG reuses only within its attachment and viewport reuses no resource payload", async () => {
+    const renderer = createRenderer("canvas");
+    const urls = trackDecorationUrls();
+    try {
+        await renderer.initialize(cacheSurface, [], [], null);
+        assert.equal((await renderer.render(decorationFrame(1))).succeeded, true);
+        assert.equal(renderer.renderViewport(viewport(1, 2, 20)).succeeded, true);
+        assert.equal((await renderer.render(decorationFrame(3, decorationCatalog(undefined, 2)))).succeeded, true);
+        assert.equal(urls.blobs.size, 1);
+        assert.equal((await renderer.render(decorationFrame(4, decorationCatalog(undefined, 1, "attachment-b")))).succeeded, true);
+        assert.equal(urls.blobs.size, 2);
+        assert.equal(urls.revoked.length, 1);
+    } finally { renderer.dispose(); urls.restore(); }
+});
+
+test("decoration decode rejection reports isolated failure without partial drawing or leaking URLs", async () => {
+    const renderer = createRenderer("canvas");
+    const urls = trackDecorationUrls();
+    try {
+        await renderer.initialize(cacheSurface, [], [], null);
+        decorationDecode = async () => { throw new Error("private SVG decode detail"); };
+        operations.length = 0;
+        const result = await renderer.render(decorationFrame(1));
+        assert.equal(result.code, "CANVAS2D_DECORATION_IMAGE_LOAD_FAILED");
+        assert.equal(operations.length, 0);
+        assert.equal(urls.revoked.length, 1);
+        assert.equal(renderer.renderViewport(viewport(1, 2)).succeeded, false);
+        decorationDecode = null;
+        assert.equal((await renderer.render(content(2, 3))).succeeded, true);
+    } finally { decorationDecode = null; renderer.dispose(); urls.restore(); }
+});
+
+test("one ten-second deadline bounds the whole SVG preparation and consumes late decode completion", async t => {
+    const renderer = createRenderer("canvas");
+    const urls = trackDecorationUrls();
+    const releases = [];
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    try {
+        await renderer.initialize(cacheSurface, [], [], null);
+        decorationDecode = () => new Promise(resolve => releases.push(resolve));
+        const catalog = decorationCatalog([decorationImage(), decorationImage("app:second", "blue", "B")]);
+        operations.length = 0;
+        const pending = renderer.render(decorationFrame(1, catalog));
+        await flushDecorationWork();
+        t.mock.timers.tick(9000);
+        releases[0]();
+        await flushDecorationWork();
+        assert.equal(releases.length, 2);
+        t.mock.timers.tick(1000);
+        assert.equal((await pending).code, "CANVAS2D_DECORATION_RESOURCE_TIMEOUT");
+        assert.equal(operations.length, 0);
+        assert.equal(urls.revoked.length, 2);
+        decorationDecode = null;
+        assert.equal((await renderer.render(content(2, 2))).succeeded, true);
+        const count = operations.length;
+        releases[1]();
+        await flushDecorationWork();
+        assert.equal(operations.length, count);
+        assert.equal(urls.revoked.length, 2);
+    } finally {
+        for (const release of releases) release();
+        decorationDecode = null; renderer.dispose(); urls.restore();
+    }
+});
+
+for (const retirement of ["content", "resize", "dpr", "owner", "dispose"]) {
+    test(`pending decoration preparation settles on ${retirement} without waiting for native decode`, async () => {
+        const renderer = createRenderer("canvas");
+        const urls = trackDecorationUrls();
+        let release;
+        try {
+            await renderer.initialize(cacheSurface, [], [], null);
+            decorationDecode = () => new Promise(resolve => { release = resolve; });
+            const pending = renderer.render(decorationFrame(1));
+            let settled = false;
+            pending.then(() => { settled = true; });
+            await flushDecorationWork();
+            assert.equal(urls.blobs.size, 1);
+            if (retirement === "content") await renderer.render(content(2, 2));
+            else if (retirement === "owner") renderer.cancelDecorationPreparation(1);
+            else if (retirement === "dispose") renderer.dispose();
+            else renderer.resize({ ...cacheSurface, cssWidth: retirement === "resize" ? 200 : 100,
+                devicePixelRatio: retirement === "dpr" ? 2 : 1.25 });
+            await flushDecorationWork();
+            assert.equal(settled, true);
+            assert.equal((await pending).succeeded, false);
+            assert.equal(urls.revoked.length, 1);
+            const count = operations.length;
+            release();
+            await flushDecorationWork();
+            assert.equal(operations.length, count);
+            assert.equal(urls.revoked.length, 1);
+        } finally { release?.(); decorationDecode = null; renderer.dispose(); urls.restore(); }
+    });
+}
+
+test("owner retirement before dispatch prevents SVG preparation and a later input can render", async () => {
+    const renderer = createRenderer("canvas");
+    const urls = trackDecorationUrls();
+    try {
+        await renderer.initialize(cacheSurface, [], [], null);
+        renderer.cancelDecorationPreparation(1);
+        assert.equal((await renderer.render(decorationFrame(1))).succeeded, false);
+        assert.equal(urls.blobs.size, 0);
+        assert.equal((await renderer.render(decorationFrame(2, decorationCatalog(undefined, 2)))).succeeded, true);
+        assert.equal(urls.blobs.size, 1);
+    } finally { renderer.dispose(); urls.restore(); }
+});
+
+test("decoration catalogs cannot shadow native resources or use duplicate references", async () => {
+    const renderer = createRenderer("canvas");
+    const urls = trackDecorationUrls();
+    try {
+        await renderer.initialize(cacheSurface, [{ reference: "app:status", uri: "/native.png" }], [], null);
+        assert.equal((await renderer.render(decorationFrame(1))).succeeded, false);
+        const duplicate = decorationImage("app:duplicate");
+        assert.equal((await renderer.render(decorationFrame(2, decorationCatalog([duplicate, duplicate])))).succeeded, false);
+        assert.equal(urls.blobs.size, 0);
+        assert.equal((await renderer.render(content(3, 3,
+            [{ ...rectangle("native", 1), geometryKind: 4, content: "app:status" }]))).succeeded, true);
+    } finally { renderer.dispose(); urls.restore(); }
+});
+
+test("retired SVG decode rejection is observed and cannot poison a fresh frame", async () => {
+    const renderer = createRenderer("canvas");
+    const urls = trackDecorationUrls();
+    let reject;
+    try {
+        await renderer.initialize(cacheSurface, [], [], null);
+        decorationDecode = () => new Promise((resolve, fail) => { reject = fail; });
+        const pending = renderer.render(decorationFrame(1));
+        await flushDecorationWork();
+        renderer.cancelDecorationPreparation(1);
+        assert.equal((await pending).succeeded, false);
+        decorationDecode = null;
+        assert.equal((await renderer.render(decorationFrame(2, decorationCatalog(undefined, 2)))).succeeded, true);
+        const count = operations.length;
+        reject(new Error("late private browser decode failure"));
+        await flushDecorationWork();
+        assert.equal(operations.length, count);
+        assert.equal(renderer.renderViewport(viewport(2, 3)).succeeded, true);
+        assert.equal(urls.blobs.size - urls.revoked.length, 1);
+    } finally { reject?.(new Error("retired")); decorationDecode = null; renderer.dispose(); urls.restore(); }
+});
+
+test("independent renderers cannot share SVG images under identical reference and revision", async () => {
+    const original = document.getElementById;
+    const secondCanvas = new FakeCanvas(new FakeContext());
+    document.getElementById = id => id === "decoration-second" ? secondCanvas : original(id);
+    const first = createRenderer("canvas");
+    const second = createRenderer("decoration-second");
+    const urls = trackDecorationUrls();
+    try {
+        await first.initialize(cacheSurface, [], [], null);
+        await second.initialize(cacheSurface, [], [], null);
+        assert.equal((await first.render(decorationFrame(1))).succeeded, true);
+        assert.equal((await second.render(decorationFrame(1,
+            decorationCatalog([decorationImage("app:status", "blue", "B")])))).succeeded, true);
+        assert.equal(urls.blobs.size, 2);
+        const [firstUrl, secondUrl] = [...urls.blobs.keys()];
+        assert.notEqual(await urls.blobs.get(firstUrl).text(), await urls.blobs.get(secondUrl).text());
+        first.dispose();
+        assert.deepEqual(urls.revoked, [firstUrl]);
+        operations.length = 0;
+        assert.equal(second.renderViewport(viewport(1, 2)).succeeded, true);
+        assert.equal(operations.find(operation => operation[0] === "drawImage")[1], secondUrl);
+    } finally {
+        first.dispose(); second.dispose(); urls.restore(); document.getElementById = original;
+    }
 });

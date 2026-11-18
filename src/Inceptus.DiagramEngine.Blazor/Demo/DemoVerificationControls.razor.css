@@ -1,0 +1,23 @@
+.demo-verification {
+    position: absolute;
+    z-index: 33;
+    right: .75rem;
+    bottom: .75rem;
+    box-sizing: border-box;
+    max-width: min(32rem, calc(100% - 1.5rem));
+    max-height: 45%;
+    overflow: auto;
+    overflow-wrap: anywhere;
+    padding: .6rem .8rem;
+    border: 1px solid #475569;
+    border-radius: .5rem;
+    color: #e2e8f0;
+    background: #0f172a;
+    font-size: .8rem;
+}
+
+summary { cursor: pointer; }
+p { margin: .6rem 0; }
+.annotation-actions { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .6rem; }
+button { padding: .35rem .6rem; cursor: pointer; }
+button:disabled { cursor: default; }

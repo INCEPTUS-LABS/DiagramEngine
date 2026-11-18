@@ -114,6 +114,15 @@ internal sealed class Canvas2DJsInterop : ICanvas2DRenderExecution
         return result;
     }
 
+    public async ValueTask CancelDecorationPreparationAsync(long contentVersion)
+    {
+        var renderer = _renderer;
+        if (!_disposed && renderer is not null)
+        {
+            await renderer.InvokeVoidAsync("cancelDecorationPreparation", contentVersion);
+        }
+    }
+
     public async ValueTask<Canvas2DTextMeasurementInteropResult> MeasureTextAsync(
         Canvas2DTextMeasurementRequestData request)
     {

@@ -350,6 +350,12 @@ public sealed partial class EditingSession : IAsyncDisposable
                 }
 
                 _closing = true;
+                _decorationInput = null;
+                _decorationComposition = null;
+                _decorationBaseScene = null;
+                _decorationPresentation = null;
+                _decorationDiagnostics = [];
+                _decorationResourceFailure = [];
                 runCancellation = _runCancellation;
                 completion = new TaskCompletionSource<EditingSessionOperationResult>(
                     TaskCreationOptions.RunContinuationsAsynchronously);

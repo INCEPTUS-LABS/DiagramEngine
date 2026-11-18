@@ -10,6 +10,119 @@ namespace Inceptus.DiagramEngine.UnitTests.Canvas2D;
 public sealed class Canvas2DRendererResourceAndFailureTests
 {
     [Fact]
+    public async Task DecorationResourcesTravelWithFrameWithoutChangingNativeConfiguration()
+    {
+        var execution = new Canvas2DRendererTestExecution();
+        await using var renderer = new Canvas2DRenderer(execution, Configuration());
+        await renderer.InitializeAsync("canvas", new Canvas2DSurfaceSize(200d, 100d, 1d));
+        var resources = SvgResources("test:decoration", "red");
+        var attachment = Guid.NewGuid();
+
+        var result = await renderer.RenderAsync(CreateImageScene("test:decoration", true), resources, attachment, 7);
+
+        Assert.True(result.Succeeded);
+        var transported = Assert.IsType<Inceptus.DiagramEngine.Canvas2D.Rendering.Interop.Canvas2DDecorationFrameResources>(
+            execution.LastFrame!.DecorationResources);
+        Assert.Equal(attachment.ToString("N"), transported.AttachmentId);
+        Assert.Equal(7, transported.InputRevision);
+        var image = Assert.Single(transported.Images);
+        Assert.Equal(resources.SvgImages["test:decoration"].SvgContent, image.SvgContent);
+        Assert.Equal(64, image.ContentIdentity.Length);
+        Assert.Equal(["test:image:a", "test:image:z"], execution.LastImageResources!.Keys);
+    }
+
+    [Fact]
+    public async Task DecorationCacheRequiresExactContentAttachmentAndInputAndNativeFrameClearsCatalog()
+    {
+        var execution = new Canvas2DRendererTestExecution();
+        await using var renderer = new Canvas2DRenderer(execution, RenderingConfiguration());
+        await renderer.InitializeAsync("canvas", new Canvas2DSurfaceSize(200d, 100d, 1d));
+        var scene = CreateImageScene("test:decoration", false);
+        var attachment = Guid.NewGuid();
+        var first = SvgResources("test:decoration", "red");
+        Assert.True((await renderer.RenderAsync(scene, first, attachment, 1)).Succeeded);
+        var firstFrame = execution.LastFrame!;
+        Assert.True((await renderer.RenderAsync(scene, SvgResources("test:decoration", "red"), attachment, 1)).Succeeded);
+        Assert.Equal(1, execution.Calls.Count(call => call == "renderViewport"));
+        Assert.True((await renderer.RenderAsync(scene, SvgResources("test:decoration", "blue"), attachment, 1)).Succeeded);
+        Assert.NotEqual(firstFrame.DecorationResources!.Identity, execution.LastFrame!.DecorationResources!.Identity);
+        Assert.True((await renderer.RenderAsync(scene, first, attachment, 2)).Succeeded);
+        Assert.True((await renderer.RenderAsync(scene, first, Guid.NewGuid(), 2)).Succeeded);
+        Assert.True((await renderer.RenderAsync(scene)).Succeeded);
+        Assert.Null(execution.LastFrame!.DecorationResources);
+        Assert.Equal(5, execution.Calls.Count(call => call == "render"));
+    }
+
+    [Fact]
+    public async Task DecorationResourcesCannotShadowNativeConfiguredImages()
+    {
+        var execution = new Canvas2DRendererTestExecution();
+        await using var renderer = new Canvas2DRenderer(execution, Configuration());
+        await renderer.InitializeAsync("canvas", new Canvas2DSurfaceSize(200d, 100d, 1d));
+        var result = await renderer.RenderAsync(CreateImageScene("test:image:a", true),
+            SvgResources("test:image:a", "red"), Guid.NewGuid(), 1);
+        Assert.False(result.Succeeded);
+        Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == Canvas2DRendererDiagnosticCodes.InvalidScene);
+        Assert.DoesNotContain("render", execution.Calls);
+    }
+
+    [Theory]
+    [InlineData(Canvas2DRenderer.DecorationImageLoadFailed, true)]
+    [InlineData(Canvas2DRenderer.DecorationResourceTimeout, true)]
+    [InlineData(Canvas2DRendererDiagnosticCodes.ImageLoadFailed, false)]
+    [InlineData(Canvas2DRendererDiagnosticCodes.RenderingFailed, false)]
+    public async Task OnlyDecorationPreparationFailuresAuthorizeNativeFallback(string code, bool isolated)
+    {
+        var execution = new Canvas2DRendererTestExecution { RenderResult = Canvas2DRendererTestExecution.Failure(code) };
+        await using var renderer = new Canvas2DRenderer(execution, RenderingConfiguration());
+        await renderer.InitializeAsync("canvas", new Canvas2DSurfaceSize(200d, 100d, 1d));
+        var result = await renderer.RenderAsync(CreateImageScene("test:decoration", true),
+            SvgResources("test:decoration", "red"), Guid.NewGuid(), 1);
+        Assert.False(result.Succeeded);
+        Assert.Equal(code, Assert.Single(result.Diagnostics).Code);
+        Assert.Equal(isolated, Canvas2DRenderer.IsDecorationResourceFailure(result));
+    }
+
+    [Fact]
+    public void MixedGraphicsFailureAndCancellationCannotAuthorizeDecorationFallback()
+    {
+        var resource = new Diagnostic(Canvas2DRenderer.DecorationImageLoadFailed,
+            DiagnosticSeverity.Error, "The SVG image could not be decoded.");
+        var graphics = new Diagnostic(Canvas2DRendererDiagnosticCodes.RenderingFailed,
+            DiagnosticSeverity.Error, "The native drawing operation failed.");
+        Assert.False(Canvas2DRenderer.IsDecorationResourceFailure(Canvas2DRendererResult.Failure([resource, graphics])));
+        Assert.False(Canvas2DRenderer.IsDecorationResourceFailure(Canvas2DRendererResult.Cancelled(resource)));
+        Assert.False(Canvas2DRenderer.IsDecorationResourceFailure(Canvas2DRendererResult.Success()));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task OwnerCancellationOrDisposalRetiresDispatchedDecorationPreparation(bool dispose)
+    {
+        var execution = new Canvas2DRendererTestExecution
+        {
+            RenderEnteredSignal = new(TaskCreationOptions.RunContinuationsAsynchronously),
+            RenderReleaseSignal = new(TaskCreationOptions.RunContinuationsAsynchronously),
+            ReleaseRenderOnDecorationRetirement = true,
+        };
+        await using var renderer = new Canvas2DRenderer(execution, RenderingConfiguration());
+        await renderer.InitializeAsync("canvas", new Canvas2DSurfaceSize(200d, 100d, 1d));
+        using var owner = new CancellationTokenSource();
+        var pending = renderer.RenderAsync(CreateImageScene("test:decoration", true),
+            SvgResources("test:decoration", "red"), Guid.NewGuid(), 1, owner.Token).AsTask();
+        await execution.RenderEnteredSignal.Task;
+        if (dispose) await renderer.DisposeAsync();
+        else owner.Cancel();
+        Assert.False((await pending).Succeeded);
+        Assert.Equal(execution.LastFrame!.ContentVersion, Assert.Single(execution.CancelledDecorationContentVersions));
+    }
+
+    private static Canvas2DDecorationResourceSet SvgResources(string reference, string fill) => new(
+        [new Canvas2DDecorationSvgResource(reference,
+            $"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 16 16\"><rect width=\"16\" height=\"16\" fill=\"{fill}\"/></svg>")]);
+
+    [Fact]
     public async Task InitializationReceivesCanonicalImageResourcesAndDefaultFont()
     {
         var execution = new Canvas2DRendererTestExecution();
